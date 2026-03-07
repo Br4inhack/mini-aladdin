@@ -1,161 +1,235 @@
 """
-Admin registration for the portfolio app.
-All 16 models are registered with sensible list views, filters, and search.
+Admin registration for the portfolio app — CRPMS.
+All 16 models are registered with @admin.register, sensible list_display,
+list_filter where useful, and search_fields on key text fields.
 """
 
 from django.contrib import admin
 from .models import (
-    Asset,
-    DataFeed,
     Portfolio,
+    Watchlist,
     Position,
+    SectorMapping,
+    PriceHistory,
+    FeatureSnapshot,
     AgentOutput,
+    DecisionLog,
+    NewsArticle,
+    SocialPost,
+    FundamentalData,
+    MacroIndicator,
     PortfolioStateSnapshot,
-    TradeOrder,
-    TradeExecution,
-    RiskMetrics,
-    SectorExposure,
-    MarketRegime,
-    BacktestRun,
     BacktestResult,
-    NewsItem,
-    SentimentScore,
-    SystemLog,
+    Alert,
+    DataIngestionLog,
 )
 
 
-@admin.register(Asset)
-class AssetAdmin(admin.ModelAdmin):
-    list_display = ['ticker', 'name', 'asset_type', 'sector', 'exchange', 'currency', 'last_price', 'is_active']
-    list_filter = ['asset_type', 'sector', 'is_active', 'currency']
-    search_fields = ['ticker', 'name']
-    ordering = ['ticker']
-    readonly_fields = ['last_price_updated', 'created_at', 'updated_at']
-
-
-@admin.register(DataFeed)
-class DataFeedAdmin(admin.ModelAdmin):
-    list_display = ['asset', 'source', 'timestamp', 'open_price', 'close_price', 'volume']
-    list_filter = ['source', 'asset__sector']
-    search_fields = ['asset__ticker']
-    ordering = ['-timestamp']
-    date_hierarchy = 'timestamp'
-    readonly_fields = ['created_at']
-
+# ─── 1. Portfolio ──────────────────────────────────────────────────────────────
 
 @admin.register(Portfolio)
 class PortfolioAdmin(admin.ModelAdmin):
-    list_display = ['name', 'owner', 'status', 'initial_capital', 'current_cash', 'created_at']
-    list_filter = ['status']
-    search_fields = ['name', 'owner__username']
+    list_display = [
+        'id', 'name', 'total_capital', 'available_capital',
+        'created_at', 'updated_at',
+    ]
+    search_fields = ['name']
+    ordering = ['-created_at']
     readonly_fields = ['created_at', 'updated_at']
 
+
+# ─── 2. Watchlist ──────────────────────────────────────────────────────────────
+
+@admin.register(Watchlist)
+class WatchlistAdmin(admin.ModelAdmin):
+    list_display = [
+        'ticker', 'company_name', 'sector', 'sub_sector',
+        'exchange', 'is_active', 'added_at',
+    ]
+    list_filter = ['sector', 'exchange', 'is_active']
+    search_fields = ['ticker', 'company_name']
+    ordering = ['ticker']
+    readonly_fields = ['added_at']
+
+
+# ─── 3. Position ───────────────────────────────────────────────────────────────
 
 @admin.register(Position)
 class PositionAdmin(admin.ModelAdmin):
-    list_display = ['portfolio', 'asset', 'direction', 'quantity', 'avg_entry_price', 'current_price', 'is_open', 'opened_at']
-    list_filter = ['direction', 'is_open', 'asset__sector']
-    search_fields = ['asset__ticker', 'portfolio__name']
+    list_display = [
+        'id', 'portfolio', 'watchlist', 'quantity',
+        'avg_buy_price', 'current_price', 'allocation_pct',
+        'unrealised_pnl', 'updated_at',
+    ]
+    list_filter = ['portfolio']
+    search_fields = ['watchlist__ticker', 'portfolio__name']
     readonly_fields = ['created_at', 'updated_at']
 
+
+# ─── 4. SectorMapping ──────────────────────────────────────────────────────────
+
+@admin.register(SectorMapping)
+class SectorMappingAdmin(admin.ModelAdmin):
+    list_display = ['ticker', 'sector', 'sub_sector']
+    list_filter = ['sector']
+    search_fields = ['ticker__ticker', 'sector']
+
+
+# ─── 5. PriceHistory ───────────────────────────────────────────────────────────
+
+@admin.register(PriceHistory)
+class PriceHistoryAdmin(admin.ModelAdmin):
+    list_display = [
+        'ticker', 'date', 'open', 'high', 'low', 'close', 'volume',
+    ]
+    list_filter = ['ticker']
+    search_fields = ['ticker__ticker']
+    ordering = ['-date']
+    date_hierarchy = 'date'
+    readonly_fields = ['created_at']
+
+
+# ─── 6. FeatureSnapshot ────────────────────────────────────────────────────────
+
+@admin.register(FeatureSnapshot)
+class FeatureSnapshotAdmin(admin.ModelAdmin):
+    list_display = ['ticker', 'date', 'created_at']
+    list_filter = ['ticker']
+    search_fields = ['ticker__ticker']
+    ordering = ['-date']
+    date_hierarchy = 'date'
+    readonly_fields = ['created_at']
+
+
+# ─── 7. AgentOutput ────────────────────────────────────────────────────────────
 
 @admin.register(AgentOutput)
 class AgentOutputAdmin(admin.ModelAdmin):
-    list_display = ['agent_name', 'asset', 'signal', 'confidence', 'generated_at', 'is_stale']
-    list_filter = ['agent_name', 'signal', 'is_stale']
-    search_fields = ['asset__ticker']
-    ordering = ['-generated_at']
-    readonly_fields = ['generated_at']
+    list_display = [
+        'ticker', 'agent_name', 'score', 'band',
+        'is_stale', 'timestamp',
+    ]
+    list_filter = ['agent_name', 'band', 'is_stale']
+    search_fields = ['ticker__ticker']
+    ordering = ['-timestamp']
+    readonly_fields = ['timestamp']
 
+
+# ─── 8. DecisionLog ────────────────────────────────────────────────────────────
+
+@admin.register(DecisionLog)
+class DecisionLogAdmin(admin.ModelAdmin):
+    list_display = [
+        'ticker', 'action', 'confidence_score', 'timestamp',
+    ]
+    list_filter = ['action']
+    search_fields = ['ticker__ticker']
+    ordering = ['-timestamp']
+    readonly_fields = ['timestamp']
+
+
+# ─── 9. NewsArticle ────────────────────────────────────────────────────────────
+
+@admin.register(NewsArticle)
+class NewsArticleAdmin(admin.ModelAdmin):
+    list_display = [
+        'ticker_tag', 'headline', 'source', 'sentiment_score',
+        'published_at', 'processed_at',
+    ]
+    list_filter = ['source', 'ticker_tag']
+    search_fields = ['ticker_tag__ticker', 'headline', 'source']
+    ordering = ['-published_at']
+    date_hierarchy = 'published_at'
+    readonly_fields = ['content_hash']
+
+
+# ─── 10. SocialPost ────────────────────────────────────────────────────────────
+
+@admin.register(SocialPost)
+class SocialPostAdmin(admin.ModelAdmin):
+    list_display = [
+        'ticker_tag', 'platform', 'sentiment_score',
+        'mention_count', 'upvotes', 'posted_at',
+    ]
+    list_filter = ['platform', 'ticker_tag']
+    search_fields = ['ticker_tag__ticker', 'text']
+    ordering = ['-posted_at']
+    readonly_fields = ['content_hash']
+
+
+# ─── 11. FundamentalData ───────────────────────────────────────────────────────
+
+@admin.register(FundamentalData)
+class FundamentalDataAdmin(admin.ModelAdmin):
+    list_display = [
+        'ticker', 'period', 'revenue', 'eps',
+        'debt_ratio', 'roe', 'pe_ratio', 'net_margin',
+        'promoter_pledge_pct', 'updated_at',
+    ]
+    list_filter = ['ticker']
+    search_fields = ['ticker__ticker', 'period']
+    ordering = ['-period']
+    readonly_fields = ['updated_at']
+
+
+# ─── 12. MacroIndicator ────────────────────────────────────────────────────────
+
+@admin.register(MacroIndicator)
+class MacroIndicatorAdmin(admin.ModelAdmin):
+    list_display = ['indicator_name', 'value', 'date', 'source']
+    list_filter = ['indicator_name', 'source']
+    search_fields = ['indicator_name', 'source']
+    ordering = ['-date']
+    date_hierarchy = 'date'
+
+
+# ─── 13. PortfolioStateSnapshot ────────────────────────────────────────────────
 
 @admin.register(PortfolioStateSnapshot)
 class PortfolioStateSnapshotAdmin(admin.ModelAdmin):
-    list_display = ['portfolio', 'snapshot_at', 'total_value', 'cash', 'risk_budget_used', 'daily_return']
+    list_display = ['id', 'portfolio', 'timestamp']
     list_filter = ['portfolio']
-    ordering = ['-snapshot_at']
-    date_hierarchy = 'snapshot_at'
-    readonly_fields = ['created_at']
+    ordering = ['-timestamp']
+    readonly_fields = ['timestamp']
 
 
-@admin.register(TradeOrder)
-class TradeOrderAdmin(admin.ModelAdmin):
-    list_display = ['portfolio', 'asset', 'side', 'order_type', 'quantity', 'limit_price', 'status', 'created_at']
-    list_filter = ['side', 'order_type', 'status']
-    search_fields = ['asset__ticker', 'portfolio__name']
-    ordering = ['-created_at']
-    readonly_fields = ['created_at', 'updated_at']
-
-
-@admin.register(TradeExecution)
-class TradeExecutionAdmin(admin.ModelAdmin):
-    list_display = ['order', 'executed_at', 'executed_quantity', 'executed_price', 'commission', 'net_value']
-    ordering = ['-executed_at']
-    readonly_fields = ['executed_at']
-
-
-@admin.register(RiskMetrics)
-class RiskMetricsAdmin(admin.ModelAdmin):
-    list_display = ['portfolio', 'computed_at', 'var_95', 'portfolio_volatility', 'sharpe_ratio', 'max_drawdown']
-    list_filter = ['portfolio']
-    ordering = ['-computed_at']
-    readonly_fields = ['computed_at']
-
-
-@admin.register(SectorExposure)
-class SectorExposureAdmin(admin.ModelAdmin):
-    list_display = ['snapshot', 'sector', 'weight', 'num_positions']
-    list_filter = ['sector']
-
-
-@admin.register(MarketRegime)
-class MarketRegimeAdmin(admin.ModelAdmin):
-    list_display = ['regime', 'confidence', 'detected_at']
-    list_filter = ['regime']
-    ordering = ['-detected_at']
-    readonly_fields = ['detected_at']
-
-
-@admin.register(BacktestRun)
-class BacktestRunAdmin(admin.ModelAdmin):
-    list_display = ['name', 'portfolio', 'start_date', 'end_date', 'initial_capital', 'status', 'created_at']
-    list_filter = ['status']
-    search_fields = ['name', 'portfolio__name']
-    ordering = ['-created_at']
-    readonly_fields = ['created_at', 'started_at', 'completed_at']
-
+# ─── 14. BacktestResult ────────────────────────────────────────────────────────
 
 @admin.register(BacktestResult)
 class BacktestResultAdmin(admin.ModelAdmin):
-    list_display = ['run', 'total_return', 'sharpe_ratio', 'max_drawdown', 'win_rate', 'total_trades']
-    ordering = ['-computed_at']
-    readonly_fields = ['computed_at']
-
-
-@admin.register(NewsItem)
-class NewsItemAdmin(admin.ModelAdmin):
-    list_display = ['title', 'source', 'author', 'published_at', 'fetched_at']
-    list_filter = ['source']
-    search_fields = ['title', 'author']
-    ordering = ['-published_at']
-    date_hierarchy = 'published_at'
-    filter_horizontal = ['assets']
-    readonly_fields = ['fetched_at']
-
-
-@admin.register(SentimentScore)
-class SentimentScoreAdmin(admin.ModelAdmin):
-    list_display = ['asset', 'label', 'score', 'model_name', 'computed_at', 'news_item']
-    list_filter = ['label', 'asset__sector']
-    search_fields = ['asset__ticker']
-    ordering = ['-computed_at']
-    readonly_fields = ['computed_at']
-
-
-@admin.register(SystemLog)
-class SystemLogAdmin(admin.ModelAdmin):
-    list_display = ['level', 'component', 'message', 'created_at']
-    list_filter = ['level', 'component']
-    search_fields = ['message']
+    list_display = [
+        'run_name', 'start_date', 'end_date', 'starting_capital',
+        'sharpe_ratio', 'cagr', 'max_drawdown', 'win_rate',
+        'capital_utilisation', 'created_at',
+    ]
+    search_fields = ['run_name']
     ordering = ['-created_at']
-    date_hierarchy = 'created_at'
     readonly_fields = ['created_at']
+
+
+# ─── 15. Alert ─────────────────────────────────────────────────────────────────
+
+@admin.register(Alert)
+class AlertAdmin(admin.ModelAdmin):
+    list_display = [
+        'ticker', 'alert_type', 'message', 'threshold_breached',
+        'is_acknowledged', 'created_at',
+    ]
+    list_filter = ['alert_type', 'is_acknowledged']
+    search_fields = ['ticker__ticker', 'message']
+    ordering = ['-created_at']
+    readonly_fields = ['created_at']
+
+
+# ─── 16. DataIngestionLog ──────────────────────────────────────────────────────
+
+@admin.register(DataIngestionLog)
+class DataIngestionLogAdmin(admin.ModelAdmin):
+    list_display = [
+        'source_name', 'ticker', 'status',
+        'records_fetched', 'timestamp',
+    ]
+    list_filter = ['status', 'source_name']
+    search_fields = ['source_name', 'ticker']
+    ordering = ['-timestamp']
+    readonly_fields = ['timestamp']
