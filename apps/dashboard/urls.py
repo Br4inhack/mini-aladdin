@@ -1,6 +1,9 @@
-﻿from django.urls import path
+"""
+URL routing for the Frontend Dashboard.
+"""
+from django.urls import path
+from apps.dashboard import views
 
-app_name = 'dashboard'
-
-urlpatterns = []
-
+urlpatterns = [
+    path('', views.DashboardHomeView.as_view(), name='dashboard-home'),
+]
