@@ -107,9 +107,6 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0'),
         'TIMEOUT': 300,
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        },
     }
 }
 
@@ -293,3 +290,8 @@ if platform.system() == 'Windows':
     # Celery on Windows requires solo pool (set in CLI: --pool=solo)
     # This env var signals that we are in a Windows multiprocessing context
     os.environ.setdefault('FORKED_BY_MULTIPROCESSING', '1')
+
+# ─── Celery Beat Schedule ─────────────────────────────────────────────────────
+
+from config.celery_schedule import *
+
