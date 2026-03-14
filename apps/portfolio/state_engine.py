@@ -12,6 +12,8 @@ import traceback
 from apps.portfolio.models import (
     Portfolio, Position, AgentOutput, PortfolioStateSnapshot, Watchlist, PriceHistory
 )
+# DRAWDOWN GUARD — Phase 2 addition
+from apps.portfolio.drawdown_guard import DrawdownGuard
 from django.core.cache import cache
 from django.conf import settings
 from django.utils import timezone
@@ -71,6 +73,29 @@ class PortfolioStateEngine:
                     'risk_budget_used_pct': self._compute_risk_budget_used(agent_data),
                 }
             }
+
+            # DRAWDOWN GUARD — Phase 2 addition
+            # Check guard state before snapshot write so guard data is persisted in history
+            try:
+                guard = DrawdownGuard()
+                # Read previous state to detect transition (inactive → active)
+                prev_guard_state = cache.get('portfolio:drawdown_guard_state') or {}
+                was_active = prev_guard_state.get('active', False)
+
+                guard_status = guard.check_guard_status()
+
+                # Fire alert only on the activation transition
+                if guard_status['active'] and not was_active:
+                    guard.create_guard_alert(guard_status)
+                    logger.warning('update_state: DrawdownGuard transitioned to ACTIVE — alert created')
+
+                # Embed guard data into state so dashboard and agents can read it
+                state_dict['drawdown_guard'] = guard_status
+                state_dict['drawdown_guard_summary'] = guard.get_guard_summary_text(guard_status)
+            except Exception as guard_exc:
+                logger.error('update_state: DrawdownGuard check failed: %s', guard_exc)
+                state_dict['drawdown_guard'] = {'active': False}
+                state_dict['drawdown_guard_summary'] = '⚠️ Drawdown Guard status unavailable.'
 
             # 7. Call _write_snapshot
             self._write_snapshot(portfolio, state_dict)
