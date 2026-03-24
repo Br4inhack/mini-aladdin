@@ -102,6 +102,10 @@ class PortfolioStateEngine:
             
             logger.info(f"Portfolio state updated successfully. Value: {metrics.get('total_value', 0.0)}")
 
+            # ADD THESE LINES — WebSocket broadcast (Phase 2 addition)
+            if settings.CRPMS.get('CHANNELS_ENABLED', True):
+                self._broadcast_state(portfolio.id, state_dict)
+
             # 8. Return state_dict
             return state_dict
 
@@ -109,6 +113,59 @@ class PortfolioStateEngine:
             logger.error(f"Failed to execute update_state: {str(e)}")
             logger.error(traceback.format_exc())
             return {}
+
+    # ADD THIS METHOD to PortfolioStateEngine:
+    def _broadcast_state(self, portfolio_id: int, state_data: dict) -> None:
+        """
+        Broadcasts the updated portfolio state to all connected WebSocket clients
+        via the Django Channels Redis channel layer.
+
+        Sends to the group ``portfolio_<portfolio_id>`` so every browser tab
+        subscribed to that portfolio receives the update. The 
+        :class:`~apps.dashboard.consumers.PortfolioConsumer` handles the
+        ``portfolio_update`` event on the client side.
+
+        Failures are logged at WARNING level and never re-raised — a broadcast
+        failure must never interrupt a State Engine update cycle.
+
+        Args:
+            portfolio_id (int): Primary key of the portfolio being updated.
+            state_data (dict): The full state dict just written to Redis / DB.
+        """
+        try:
+            # Late imports keep this module free of circular deps and allow
+            # the State Engine to load even when channels is not installed.
+            from channels.layers import get_channel_layer  # noqa: PLC0415
+            from datetime import datetime  # noqa: PLC0415
+            import asyncio  # noqa: PLC0415
+
+            channel_layer = get_channel_layer()
+            if channel_layer is None:
+                logger.warning('_broadcast_state: channel layer is None — is CHANNEL_LAYERS configured?')
+                return
+
+            group_name = f'portfolio_{portfolio_id}'
+            metrics    = state_data.get('portfolio_metrics', {})
+            guard      = state_data.get('drawdown_guard', {})
+
+            payload = {
+                'type': 'portfolio_update',
+                'data': {
+                    'portfolio_id':         portfolio_id,
+                    'timestamp':            datetime.utcnow().isoformat(),
+                    'drawdown_guard_active': guard.get('active', False),
+                    'total_pnl_pct':        metrics.get('total_pnl_pct'),
+                    'positions':            state_data.get('positions', []),
+                    'active_alerts':        state_data.get('active_alert_count', 0),
+                },
+            }
+
+            asyncio.run(channel_layer.group_send(group_name, payload))
+            logger.debug('_broadcast_state: broadcast sent to group %s', group_name)
+
+        except Exception as exc:
+            # Broadcast failures must never break the update cycle
+            logger.warning('_broadcast_state: broadcast failed (non-critical): %s', exc)
 
     def _update_position_price(self, position: Position) -> None:
         """
