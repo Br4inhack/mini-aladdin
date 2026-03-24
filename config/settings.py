@@ -107,9 +107,6 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
         'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0'),
         'TIMEOUT': 300,
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        },
     }
 }
 
@@ -221,7 +218,9 @@ LOGGING = {
 CRPMS = {
     # Risk thresholds
     'MAX_PORTFOLIO_VAR': 0.02,               # Max 2% daily Value-at-Risk
-    'MAX_DRAWDOWN_THRESHOLD': 0.10,          # 10% drawdown triggers review
+    'MAX_DRAWDOWN_THRESHOLD': 0.10,          # 10% drawdown triggers guard activation
+    'DRAWDOWN_RECOVERY_THRESHOLD': 0.07,     # 7% drawdown to deactivate guard (hysteresis)
+    'DRAWDOWN_GUARD_ENABLED': True,          # Master on/off switch for DrawdownGuard
     'RISK_SCORE_EXIT_THRESHOLD': 80,         # Risk score ≥ 80 → exit position
     'RISK_SCORE_REDUCE_THRESHOLD': 60,       # Risk score ≥ 60 → reduce exposure
 
@@ -293,3 +292,8 @@ if platform.system() == 'Windows':
     # Celery on Windows requires solo pool (set in CLI: --pool=solo)
     # This env var signals that we are in a Windows multiprocessing context
     os.environ.setdefault('FORKED_BY_MULTIPROCESSING', '1')
+
+# ─── Celery Beat Schedule ─────────────────────────────────────────────────────
+
+from config.celery_schedule import *
+
