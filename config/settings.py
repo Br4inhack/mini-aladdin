@@ -33,6 +33,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    'channels',             # Django Channels — must come before staticfiles
     'rest_framework',
     'django_celery_beat',
     'django_celery_results',
@@ -83,6 +84,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION  = 'config.asgi.application'
 
 # ─── Database ─────────────────────────────────────────────────────────────────
 
@@ -100,13 +102,20 @@ DATABASES = {
     }
 }
 
-# ─── Cache (Redis) ────────────────────────────────────────────────────────────
+# ─── Cache (Local Memory) ───────────────────────────────────────────────────
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0'),
-        'TIMEOUT': 300,
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+# ─── Django Channels ───────────────────────────────────────────────────────────────
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
     }
 }
 
@@ -259,6 +268,13 @@ CRPMS = {
     'DEFAULT_PRICE_SOURCE': 'yfinance',
     'DEFAULT_SENTIMENT_SOURCES': ['newsapi', 'reddit'],
     'MACRO_DATA_SOURCE': 'fred',
+
+    # ... all existing keys stay ...
+    'LLM_PRIMARY_MODEL':   'gemini-2.0-flash',
+    'LLM_FALLBACK_MODEL':  'llama-3.3-70b-versatile',
+    'LLM_MAX_TOKENS':       800,
+    'LLM_ENABLED':          False,  # set False to fall back to templates instantly
+    'CHANNELS_ENABLED':     True,   # Django Channels / WebSocket support
 }
 
 # ─── Feature Flags ────────────────────────────────────────────────────────────
