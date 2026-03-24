@@ -33,6 +33,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    'channels',             # Django Channels — must come before staticfiles
     'rest_framework',
     'django_celery_beat',
     'django_celery_results',
@@ -83,6 +84,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION  = 'config.asgi.application'
 
 # ─── Database ─────────────────────────────────────────────────────────────────
 
@@ -100,16 +102,20 @@ DATABASES = {
     }
 }
 
-# ─── Cache (Redis) ────────────────────────────────────────────────────────────
+# ─── Cache (Local Memory) ───────────────────────────────────────────────────
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0'),
-        'TIMEOUT': 300,
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        },
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+# ─── Django Channels ───────────────────────────────────────────────────────────────
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
     }
 }
 
@@ -221,7 +227,9 @@ LOGGING = {
 CRPMS = {
     # Risk thresholds
     'MAX_PORTFOLIO_VAR': 0.02,               # Max 2% daily Value-at-Risk
-    'MAX_DRAWDOWN_THRESHOLD': 0.10,          # 10% drawdown triggers review
+    'MAX_DRAWDOWN_THRESHOLD': 0.10,          # 10% drawdown triggers guard activation
+    'DRAWDOWN_RECOVERY_THRESHOLD': 0.07,     # 7% drawdown to deactivate guard (hysteresis)
+    'DRAWDOWN_GUARD_ENABLED': True,          # Master on/off switch for DrawdownGuard
     'RISK_SCORE_EXIT_THRESHOLD': 80,         # Risk score ≥ 80 → exit position
     'RISK_SCORE_REDUCE_THRESHOLD': 60,       # Risk score ≥ 60 → reduce exposure
 
@@ -260,6 +268,13 @@ CRPMS = {
     'DEFAULT_PRICE_SOURCE': 'yfinance',
     'DEFAULT_SENTIMENT_SOURCES': ['newsapi', 'reddit'],
     'MACRO_DATA_SOURCE': 'fred',
+
+    # ... all existing keys stay ...
+    'LLM_PRIMARY_MODEL':   'gemini-2.0-flash',
+    'LLM_FALLBACK_MODEL':  'llama-3.3-70b-versatile',
+    'LLM_MAX_TOKENS':       800,
+    'LLM_ENABLED':          False,  # set False to fall back to templates instantly
+    'CHANNELS_ENABLED':     True,   # Django Channels / WebSocket support
 }
 
 # ─── Feature Flags ────────────────────────────────────────────────────────────
@@ -293,3 +308,8 @@ if platform.system() == 'Windows':
     # Celery on Windows requires solo pool (set in CLI: --pool=solo)
     # This env var signals that we are in a Windows multiprocessing context
     os.environ.setdefault('FORKED_BY_MULTIPROCESSING', '1')
+
+# ─── Celery Beat Schedule ─────────────────────────────────────────────────────
+
+from config.celery_schedule import *
+

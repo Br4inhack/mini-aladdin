@@ -1,6 +1,6 @@
 """
-Celery task skeletons for the Data Ingestion app.
-OWNER: Person 2
+Celery task skeletons for the Agents app.
+OWNER: Person 3 and 4
 """
 
 from celery import shared_task
@@ -10,15 +10,15 @@ import traceback
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def fetch_market_data(self):
+def run_market_risk_agent(self):
     logger = get_task_logger(__name__)
-    logger.info("Starting fetch_market_data")
+    logger.info("Starting run_market_risk_agent")
     try:
-        # TODO: Person 2 implements logic here
+        # TODO: Person 3/4 implements logic here
         pass
         return {'status': 'success'}
     except Exception as exc:
-        logger.error(f"fetch_market_data failed: {exc}")
+        logger.error(f"run_market_risk_agent failed: {exc}")
         logger.error(traceback.format_exc())
         try:
             raise self.retry(exc=exc)
@@ -27,15 +27,15 @@ def fetch_market_data(self):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def fetch_news_data(self):
+def run_sentiment_agent(self):
     logger = get_task_logger(__name__)
-    logger.info("Starting fetch_news_data")
+    logger.info("Starting run_sentiment_agent")
     try:
-        # TODO: Person 2 implements logic here
+        # TODO: Person 3/4 implements logic here
         pass
         return {'status': 'success'}
     except Exception as exc:
-        logger.error(f"fetch_news_data failed: {exc}")
+        logger.error(f"run_sentiment_agent failed: {exc}")
         logger.error(traceback.format_exc())
         try:
             raise self.retry(exc=exc)
@@ -44,15 +44,15 @@ def fetch_news_data(self):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def fetch_social_data(self):
+def run_fundamental_agent(self):
     logger = get_task_logger(__name__)
-    logger.info("Starting fetch_social_data")
+    logger.info("Starting run_fundamental_agent")
     try:
-        # TODO: Person 2 implements logic here
+        # TODO: Person 3/4 implements logic here
         pass
         return {'status': 'success'}
     except Exception as exc:
-        logger.error(f"fetch_social_data failed: {exc}")
+        logger.error(f"run_fundamental_agent failed: {exc}")
         logger.error(traceback.format_exc())
         try:
             raise self.retry(exc=exc)
@@ -61,15 +61,15 @@ def fetch_social_data(self):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def fetch_fundamental_data(self):
+def run_opportunity_agent(self):
     logger = get_task_logger(__name__)
-    logger.info("Starting fetch_fundamental_data")
+    logger.info("Starting run_opportunity_agent")
     try:
-        # TODO: Person 2 implements logic here
+        # TODO: Person 3/4 implements logic here
         pass
         return {'status': 'success'}
     except Exception as exc:
-        logger.error(f"fetch_fundamental_data failed: {exc}")
+        logger.error(f"run_opportunity_agent failed: {exc}")
         logger.error(traceback.format_exc())
         try:
             raise self.retry(exc=exc)
@@ -78,33 +78,16 @@ def fetch_fundamental_data(self):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def fetch_macro_data(self):
+def run_all_agents(self):
+    """Triggered dynamically to run all 4 agents."""
     logger = get_task_logger(__name__)
-    logger.info("Starting fetch_macro_data")
+    logger.info("Starting run_all_agents")
     try:
-        # TODO: Person 2 implements logic here
+        # TODO: Person 3/4 implements sequential logic here
         pass
         return {'status': 'success'}
     except Exception as exc:
-        logger.error(f"fetch_macro_data failed: {exc}")
-        logger.error(traceback.format_exc())
-        try:
-            raise self.retry(exc=exc)
-        except self.MaxRetriesExceededError:
-            return {'status': 'failed', 'error': str(exc)}
-
-
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def run_feature_engineering(self):
-    """Triggered dynamically after fetch_market_data completes."""
-    logger = get_task_logger(__name__)
-    logger.info("Starting run_feature_engineering")
-    try:
-        # TODO: Person 2 implements logic here
-        pass
-        return {'status': 'success'}
-    except Exception as exc:
-        logger.error(f"run_feature_engineering failed: {exc}")
+        logger.error(f"run_all_agents failed: {exc}")
         logger.error(traceback.format_exc())
         try:
             raise self.retry(exc=exc)
