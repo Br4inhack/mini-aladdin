@@ -4,15 +4,21 @@ apps/portfolio/suggestion_generator.py
 Converts allocation results and agent decisions into natural language text
 the user can read and act on.
 
-  Phase 1: generate_mode1_suggestion — enhanced single-ticker action suggestion
-  Phase 2: generate_mode2_suggestion — multi-paragraph fresh-capital deployment plan
-  Phase 3: will replace both with Claude API calls (drop-in replacement)
+  Phase 1 / 2: generate_mode1_suggestion, generate_mode2_suggestion
+               — try Gemini (via LLMClient) first; fall back to f-string templates.
+  Phase 3:     LLM path is already live. Prompt files in apps/portfolio/prompts/.
 """
 
 import logging
+from pathlib import Path
 from typing import Optional
 
+from django.conf import settings
+
 logger = logging.getLogger('apps.portfolio')
+
+# Resolve prompt directory relative to this file so it works regardless of CWD
+_PROMPTS_DIR = Path(__file__).parent / 'prompts'
 
 
 class SuggestionGenerator:
@@ -20,9 +26,9 @@ class SuggestionGenerator:
     Generates human-readable portfolio suggestions from allocation data.
 
     Bridges the gap between the quantitative output of CapitalAllocator /
-    DecisionEngine and the user-facing dashboard text. All methods return
-    plain strings with paragraph breaks (double newlines). No external API
-    dependencies — Phase 3 will hot-swap these methods with Claude calls.
+    DecisionEngine and the user-facing dashboard text. When ``LLM_ENABLED``
+    is ``True`` in ``settings.CRPMS``, Gemini is called first; f-string
+    templates are used as an automatic fallback on any LLM failure.
 
     Example
     -------
@@ -35,6 +41,27 @@ class SuggestionGenerator:
     ... )
     >>> print(text)
     """
+
+    def __init__(self) -> None:
+        crpms = getattr(settings, 'CRPMS', {})
+        self.llm_enabled = crpms.get('LLM_ENABLED', False)
+
+        # Load system prompt files — graceful fallback to empty string on missing file
+        self.mode1_system = self._load_prompt('mode1_system.txt')
+        self.mode2_system = self._load_prompt('mode2_system.txt')
+
+    @staticmethod
+    def _load_prompt(filename: str) -> str:
+        """Reads a prompt file from the prompts/ directory. Returns '' on error."""
+        path = _PROMPTS_DIR / filename
+        try:
+            return path.read_text(encoding='utf-8')
+        except FileNotFoundError:
+            logger.warning('SuggestionGenerator: prompt file not found: %s', path)
+            return ''
+        except Exception as exc:
+            logger.warning('SuggestionGenerator: failed to load prompt %s: %s', filename, exc)
+            return ''
 
     # ── Public: Mode 2 ──────────────────────────────────────────────────────
 
@@ -72,6 +99,16 @@ class SuggestionGenerator:
         >>> text = sg.generate_mode2_suggestion(500_000, ['IT'], result, [])
         >>> assert text.startswith('Based on your available capital')
         """
+        # ── LLM path (Gemini-first, template fallback) ────────────────────
+        if self.llm_enabled and self.mode2_system:
+            user_prompt = self._build_mode2_user_prompt(
+                available_capital, preferred_sectors, allocation_result, warnings
+            )
+            llm_result = self._call_llm(self.mode2_system, user_prompt)
+            if llm_result is not None:
+                return llm_result
+
+        # ── Template fallback (all existing logic below, unchanged) ───────
         try:
             allocations   = allocation_result.get('allocations', [])
             summary       = allocation_result.get('summary', {})
@@ -214,8 +251,17 @@ class SuggestionGenerator:
         ... )
         >>> assert 'REDUCE' in text or 'reduce' in text.lower()
         """
+        # ── LLM path (Gemini-first, template fallback) ────────────────────
+        if self.llm_enabled and self.mode1_system:
+            user_prompt = self._build_mode1_user_prompt(
+                ticker, action, decision_data, agent_outputs
+            )
+            llm_result = self._call_llm(self.mode1_system, user_prompt)
+            if llm_result is not None:
+                return llm_result
+
+        # ── Template fallback (all existing logic below, unchanged) ───────
         try:
-            action_upper = action.upper().strip()
 
             # Extract context values with safe defaults
             confidence_pct  = round(decision_data.get('confidence_score', 0.0) * 100, 1)
@@ -330,6 +376,108 @@ class SuggestionGenerator:
                 f"Unable to generate suggestion for {ticker} at this time. "
                 f"Please review the decision data manually. (Error: {exc})"
             )
+
+    # ── LLM helpers ─────────────────────────────────────────────────────────
+
+    def _call_llm(self, system_prompt: str, user_prompt: str) -> Optional[str]:
+        """
+        Calls LLMClient.generate() and returns the response, or None on failure.
+
+        Separates the import so that the module loads cleanly even when the
+        ``openai`` package is not installed — LLM calls simply return None
+        and templates take over.
+        """
+        try:
+            from apps.portfolio.llm_client import llm_client, LLMAPIError  # noqa: PLC0415
+            return llm_client.generate(system_prompt, user_prompt)
+        except Exception as exc:  # LLMAPIError is a subclass of Exception
+            logger.warning('LLM generation failed, falling back to template: %s', exc)
+            return None
+
+    def _build_mode1_user_prompt(
+        self,
+        ticker: str,
+        action: str,
+        decision_data: dict,
+        agent_outputs: dict,
+    ) -> str:
+        """
+        Formats single-ticker decision data into a compact labelled text block
+        the Mode 1 system prompt can reason over.
+        """
+        risk   = agent_outputs.get('market_risk', {}) or {}
+        senti  = agent_outputs.get('sentiment', {}) or {}
+        fund   = agent_outputs.get('fundamental', {}) or {}
+
+        risk_score    = round(float(risk.get('score', 0.0)) * 100, 1)
+        risk_band     = risk.get('band', 'UNKNOWN')
+        senti_score   = round(float(senti.get('score', 0.0)) * 100, 1)
+        fund_score    = round(float(fund.get('score', 0.0)) * 100, 1)
+        confidence    = round(float(decision_data.get('confidence_score', 0.0)) * 100, 1)
+        current_qty   = decision_data.get('current_qty', 0)
+        current_price = decision_data.get('current_price', 0.0)
+        current_pct   = decision_data.get('current_pct', 0.0)
+        guard_active  = decision_data.get('drawdown_guard_active', False)
+        portfolio_pnl = decision_data.get('total_pnl_pct', 0.0)
+        portfolio_name = decision_data.get('portfolio_name', 'Portfolio')
+
+        lines = [
+            f'portfolio_name={portfolio_name}',
+            f'total_pnl_pct={portfolio_pnl:.2f}%',
+            f'drawdown_guard_active={guard_active}',
+            f'ticker={ticker}',
+            f'action={action.upper()}',
+            f'confidence={confidence:.1f}%',
+            f'risk_band={risk_band}',
+            f'risk_score={risk_score:.1f}/100',
+            f'sentiment_score={senti_score:.1f}/100',
+            f'fundamental_score={fund_score:.1f}/100',
+            f'current_qty={current_qty}',
+            f'current_price=₹{current_price:,.2f}',
+            f'current_allocation_pct={current_pct:.1f}%',
+        ]
+        return '\n'.join(lines)
+
+    def _build_mode2_user_prompt(
+        self,
+        available_capital: float,
+        preferred_sectors: list[str],
+        allocation_result: dict,
+        warnings: list[str],
+    ) -> str:
+        """
+        Formats Mode 2 allocation data into a compact labelled text block
+        the Mode 2 system prompt can reason over.
+        """
+        summary       = allocation_result.get('summary', {})
+        allocations   = allocation_result.get('allocations', [])
+        guard_active  = summary.get('drawdown_guard_active', False)
+        total_deployed = summary.get('total_deployed', 0.0)
+        leftover      = summary.get('leftover_capital', 0.0)
+        deployment_pct = summary.get('deployment_pct', 0.0)
+
+        header = [
+            f'total_capital=₹{available_capital:,.0f}',
+            f'preferred_sectors={", ".join(preferred_sectors)}',
+            f'total_deployed=₹{total_deployed:,.0f} ({deployment_pct:.1f}%)',
+            f'leftover=₹{leftover:,.0f}',
+            f'num_positions={len(allocations)}',
+            f'drawdown_guard_active={guard_active}',
+        ]
+        if warnings:
+            header.append('warnings=' + ' | '.join(warnings))
+
+        position_lines = []
+        for a in allocations:
+            position_lines.append(
+                f"{a['ticker']} | shares={a['shares']} "
+                f"| rupees=₹{a['rupee_amount']:,.0f} "
+                f"| pct={a['allocation_pct']:.1f}% "
+                f"| band={a.get('risk_band', '—')} "
+                f"| opp_score={a.get('opportunity_score', 0):.0f}"
+            )
+
+        return '\n'.join(header) + '\n\npositions:\n' + '\n'.join(position_lines)
 
     # ── Private helpers ─────────────────────────────────────────────────────
 

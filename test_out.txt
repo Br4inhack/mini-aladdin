@@ -1,0 +1,20 @@
+﻿
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  CRPMS Integration Test ΓÇö 12 Checks
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  [PASS] Check 01: Database connected. Portfolio rows: 1
+  [FAIL] Check 02: Redis error: Error 10061 connecting to 127.0.0.1:6379. No connection could be made because the target machine actively refused it.
+  [PASS] Check 03: Watchlist has 79 active tickers
+  [PASS] Check 04: SectorMapping has 79 records
+  [PASS] Check 05: PriceHistory has 1 records within last 7 days
+  [PASS] Check 06: FeatureSnapshot has 1 records. Latest: 2026-03-24 13:18:04.194283+00:00
+  [PASS] Check 07: market_risk AgentOutput: 1 records. Bands: LOW:0 | MEDIUM:1 | HIGH:0 | CRITICAL:0
+  [PASS] Check 08: sentiment AgentOutput: 1 records
+  [PASS] Check 09: Today's DecisionLog: 1 entries. HOLD:1
+  [PASS] Check 10: PortfolioStateEngine ran OK. Snapshot at: 2026-03-24 13:20:41.737150+00:00
+  [FAIL] Check 11: generate_portfolio_suggestion returned empty. Result: {'error': 'State unavailable. Check Redis or DB.', 'suggestion_text': 'Data unavailable.'}
+  [FAIL] Check 12: LLM Client error: Both Gemini and Groq failed
+
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  Γ¥î  9/12 checks passed. 3 FAILED ΓÇö fix before demo.
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
