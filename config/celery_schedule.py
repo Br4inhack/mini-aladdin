@@ -1,62 +1,56 @@
-"""
-Centralised Celery Beat Schedule Configuration.
-Maps task execution to specific crontab definitions.
-"""
-
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
-    # ─── Every 15 Minutes (Market Hours: Mon-Fri) ─────────────────────────────
-    'fetch_market_data_every_15m': {
-        'task': 'apps.data_ingestion.tasks.fetch_market_data',
-        'schedule': crontab(minute='*/15', day_of_week='1-5'),
+
+    # ── Person 2 — Data Ingestion ──────────────────────────────────────
+    'ingest-price-history-daily': {
+        'task': 'apps.data_ingestion.tasks.ingest_watchlist_price_history',
+        'schedule': crontab(hour=18, minute=30),  # after NSE close 3:30 PM IST
     },
-    'run_market_risk_agent_every_15m': {
-        'task': 'apps.agents.tasks.run_market_risk_agent',
-        'schedule': crontab(minute='*/15', day_of_week='1-5'),
+    'ingest-price-history-batch-weekly': {
+        'task': 'apps.data_ingestion.tasks.ingest_watchlist_price_history_batch',
+        'schedule': crontab(day_of_week=0, hour=6, minute=0),  # Sunday 6 AM backfill
     },
-    'run_opportunity_agent_every_15m': {
-        'task': 'apps.agents.tasks.run_opportunity_agent',
-        'schedule': crontab(minute='*/15', day_of_week='1-5'),
+    'ingest-benchmark-daily': {
+        'task': 'apps.data_ingestion.tasks.ingest_benchmark_history',
+        'schedule': crontab(hour=19, minute=0),
     },
-    'update_portfolio_state_every_15m': {
+    'ingest-nse-bhavcopy-daily': {
+        'task': 'apps.data_ingestion.tasks.ingest_nse_bhavcopy_prices',
+        'schedule': crontab(hour=19, minute=30),
+        'kwargs': {'trade_date': ''},  # filled dynamically — Person 2 handles this
+    },
+    'ingest-fred-macro-weekly': {
+        'task': 'apps.data_ingestion.tasks.ingest_fred_macro_indicator',
+        'schedule': crontab(day_of_week=1, hour=7, minute=0),  # Monday 7 AM
+        'kwargs': {'indicator_name': 'US_GDP', 'fred_code': 'GDP'},
+    },
+    'ingest-rbi-macro-weekly': {
+        'task': 'apps.data_ingestion.tasks.ingest_rbi_macro_data',
+        'schedule': crontab(day_of_week=1, hour=7, minute=30),
+    },
+    'data-quality-check-daily': {
+        'task': 'apps.data_ingestion.tasks.run_data_quality_checks',
+        'schedule': crontab(hour=20, minute=0),
+    },
+
+    # ── Person 3 — Feature Engine + Market Risk Agent ──────────────────
+    # Person 3 fills in their actual task names here when they merge
+    # 'run-feature-engineering-daily': {
+    #     'task': 'apps.feature_engine.tasks.run_feature_engineering',
+    #     'schedule': crontab(hour=20, minute=30),
+    # },
+
+    # ── Person 4 — Sentiment + Decision Agent ─────────────────────────
+    # Person 4 fills in their actual task names here when they merge
+    # 'run-sentiment-pipeline-daily': {
+    #     'task': 'apps.decision_engine.tasks.run_sentiment_pipeline',
+    #     'schedule': crontab(hour=21, minute=0),
+    # },
+
+    # ── Person 1 — Portfolio State Engine ─────────────────────────────
+    'update-portfolio-state-every-15min': {
         'task': 'apps.portfolio.tasks.update_portfolio_state',
-        'schedule': crontab(minute='*/15', day_of_week='1-5'),
-    },
-
-    # ─── Every 1 Hour (Market Hours: Mon-Fri) ─────────────────────────────────
-    'fetch_news_data_hourly': {
-        'task': 'apps.data_ingestion.tasks.fetch_news_data',
-        'schedule': crontab(minute='0', day_of_week='1-5'),
-    },
-    'run_sentiment_agent_hourly': {
-        'task': 'apps.agents.tasks.run_sentiment_agent',
-        'schedule': crontab(minute='0', day_of_week='1-5'),
-    },
-
-    # ─── Every 2 Hours (Market Hours: Mon-Fri) ────────────────────────────────
-    'fetch_social_data_every_2h': {
-        'task': 'apps.data_ingestion.tasks.fetch_social_data',
-        'schedule': crontab(minute='0', hour='*/2', day_of_week='1-5'),
-    },
-
-    # ─── Daily at 6:00 PM IST (After Market Mon-Fri) ──────────────────────────
-    'fetch_fundamental_data_daily': {
-        'task': 'apps.data_ingestion.tasks.fetch_fundamental_data',
-        'schedule': crontab(minute='0', hour='18', day_of_week='1-5'),
-    },
-    'fetch_macro_data_daily': {
-        'task': 'apps.data_ingestion.tasks.fetch_macro_data',
-        'schedule': crontab(minute='0', hour='18', day_of_week='1-5'),
-    },
-    'run_fundamental_agent_daily': {
-        'task': 'apps.agents.tasks.run_fundamental_agent',
-        'schedule': crontab(minute='0', hour='18', day_of_week='1-5'),
-    },
-
-    # ─── Daily at Midnight (Every Day) ────────────────────────────────────────
-    'purge_stale_data_daily': {
-        'task': 'apps.portfolio.tasks.purge_stale_data',
-        'schedule': crontab(minute='0', hour='0'),
+        'schedule': crontab(minute='*/15'),  # every 15 minutes during market hours
     },
 }
