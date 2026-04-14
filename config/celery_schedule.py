@@ -53,4 +53,9 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.portfolio.tasks.update_portfolio_state',
         'schedule': crontab(minute='*/15'),  # every 15 minutes during market hours
     },
+    'run-alert-engine-every-15min': {
+        'task': 'apps.portfolio.tasks.run_alert_engine_task',
+        'schedule': crontab(minute='*/15'),
+        'kwargs': {'portfolio_id': 1},
+    },
 }

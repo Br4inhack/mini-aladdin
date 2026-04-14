@@ -77,3 +77,18 @@ def purge_stale_data(self):
             raise self.retry(exc=exc)
         except self.MaxRetriesExceededError:
             return {'status': 'failed', 'error': str(exc)}
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=30)
+def run_alert_engine_task(self, portfolio_id: int) -> dict:
+    logger = get_task_logger(__name__)
+    try:
+        from apps.portfolio.alert_engine import AlertEngine
+        return AlertEngine().run(portfolio_id)
+    except Exception as exc:
+        logger.error(f"run_alert_engine_task failed: {exc}")
+        logger.error(traceback.format_exc())
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            return {'status': 'failed', 'error': str(exc)}

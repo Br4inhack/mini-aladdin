@@ -1,0 +1,93 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Watchlist & Opportunities — CRPMS{% endblock %}
+{% block page_title %}Watchlist & Opportunities{% endblock %}
+{% block page_subtitle %}Discover new assets for Portfolio #{{ portfolio_id }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-row">
+  <div class="dashboard-col" style="flex:1;">
+    <div class="section">
+      <div class="section-hdr">
+        <div>
+          <h2>Market Opportunities</h2>
+          <small class="text-muted" id="watchlist-meta">Scanning active watchlist...</small>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr style="border-top: 1px solid var(--border-light);">
+              <th>Ticker</th>
+              <th>Company</th>
+              <th>Sector</th>
+              <th class="r">Price</th>
+              <th class="c">AI Risk Band</th>
+              <th class="c">Deploy Capital</th>
+            </tr>
+          </thead>
+          <tbody id="watchlist-tbody">
+            {% for i in "12345" %}
+            <tr>
+              <td><div class="skeleton" style="height:14px;width:60px;"></div></td>
+              <td><div class="skeleton" style="height:14px;width:140px;"></div></td>
+              <td><div class="skeleton" style="height:14px;width:80px;"></div></td>
+              <td class="r"><div class="skeleton" style="height:14px;width:60px;margin-left:auto;"></div></td>
+              <td class="c"><div class="skeleton" style="height:20px;width:60px;margin:auto;border-radius:99px;"></div></td>
+              <td class="c"><div class="skeleton" style="height:24px;width:80px;margin:auto;border-radius:8px;"></div></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PID = {{ portfolio_id }};
+const inr = (n) => new Intl.NumberFormat('en-IN', { style:'currency', currency:'INR', maximumFractionDigits:2 }).format(Number(n));
+
+async function loadWatchlist() {
+  try {
+    const rawData = await fetch(`/api/watchlist/opportunities/`).then(r=>r.json());
+    document.getElementById('watchlist-meta').textContent = `Showing ${rawData.length} tradeable instruments`;
+    
+    const tbody = document.getElementById('watchlist-tbody');
+    if(!rawData.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No new opportunities available on the watchlist.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rawData.map(w => {
+      const band = w.risk_band;
+      const rb = window.CRPMS.riskBadge[band] || window.CRPMS.riskBadge.UNKNOWN;
+      const rd = window.CRPMS.riskDot[band] || window.CRPMS.riskDot.UNKNOWN;
+      
+      return `
+        <tr class="clickable" onclick="location.href='/dashboard/asset/${w.ticker}/'">
+          <td><strong>${w.ticker.split('.')[0]}</strong></td>
+          <td class="text-muted text-sm">${w.company_name || '—'}</td>
+          <td class="text-sm">${w.sector || '—'}</td>
+          <td class="r">${w.current_price ? inr(w.current_price) : '—'}</td>
+          <td class="c"><span class="${rb}"><span class="${rd}"></span>${band}</span></td>
+          <td class="c">
+            <button onclick="event.stopPropagation(); alert('Simulated Buy Executed for ${w.ticker}')"
+                    style="background:#3b82f6;color:#fff;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;">
+              INVEST
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+  } catch(e) {
+    document.getElementById('watchlist-tbody').innerHTML = `<tr><td colspan="6" class="error-msg">Failed to load: ${e.message}</td></tr>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadWatchlist);
+</script>
+{% endblock %}

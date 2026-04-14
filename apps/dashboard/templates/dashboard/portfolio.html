@@ -1,0 +1,25 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}CRPMS — Portfolio Detail{% endblock %}
+{% block page_title %}Portfolio Detail{% endblock %}
+{% block page_subtitle %}Positions · Risk · Decisions · Portfolio #{{ portfolio_id }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div id="portfolio-detail-content" class="text-gray-500 text-sm py-10 text-center">Loading portfolio data…</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PID = {{ portfolio_id }};
+// Full detail view — extend with Risk and Decision panels as needed
+async function loadDetail() {
+  const r = await fetch(`/api/portfolio/${PID}/state-snapshot/`);
+  const d = await r.json();
+  document.getElementById('portfolio-detail-content').innerHTML =
+    `<pre class="text-left bg-gray-100 text-xs p-4 rounded-lg overflow-auto">${JSON.stringify(d, null, 2)}</pre>`;
+}
+loadDetail();
+</script>
+{% endblock %}
