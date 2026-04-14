@@ -45,3 +45,13 @@ class BacktestView(View):
 class AlertHistoryView(View):
     def get(self, request):
         return render(request, 'dashboard/alerts.html', {'portfolio_id': 1})
+
+
+class SettingsView(View):
+    def get(self, request):
+        from django.conf import settings
+        context = {
+            'CRPMS': getattr(settings, 'CRPMS', {}),
+            'FEATURES': getattr(settings, 'FEATURES', {})
+        }
+        return render(request, 'dashboard/settings.html', context)

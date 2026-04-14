@@ -5,16 +5,20 @@ DRF API Views for the CRPMS Portfolio app.
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 
 from utils.cache import health_check
 from utils.helpers import get_ist_now
 from datetime import date, timedelta
+from collections import defaultdict
 from apps.portfolio.models import (
+    MacroIndicator,
     Watchlist, Portfolio, Position, AgentOutput,
     DecisionLog, PortfolioStateSnapshot,
     Alert, PriceHistory, NewsArticle, BacktestResult
 )
 from apps.portfolio.serializers import (
+    MacroIndicatorSerializer,
     PortfolioSummarySerializer,
     PositionSerializer,
     AgentOutputSerializer,
@@ -234,6 +238,24 @@ class BacktestResultListView(APIView):
             return Response({'error': str(e)}, status=500)
 
 
+class BacktestDetailView(APIView):
+    """VIEW 20: Returns a specific BacktestResult."""
+    permission_classes = []
+
+    def get(self, request, portfolio_id, backtest_id):
+        try:
+            get_object_or_404(Portfolio, id=portfolio_id)
+            result = get_object_or_404(BacktestResult, id=backtest_id)
+            serializer = BacktestResultSerializer(result)
+            return Response(serializer.data)
+        except Exception as e:
+            from django.http import Http404
+            if isinstance(e, Http404):
+                return Response({'error': 'Not found'}, status=404)
+            return Response({'error': str(e)}, status=500)
+
+
+
 class RunBacktestView(APIView):
     """VIEW 11: Triggers Celery task run_backtest_task.delay(start_date, end_date)."""
     permission_classes = []
@@ -438,6 +460,144 @@ class PnLTrendView(APIView):
                     'total_pnl_pct': round(pnl_pct, 4),
                 })
             return Response(result)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
+
+class AlertPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+class AlertHistoryView(APIView):
+    """VIEW 18: Returns paginated Alert history with optional filters."""
+    permission_classes = []
+
+    def get(self, request, portfolio_id):
+        try:
+            get_object_or_404(Portfolio, id=portfolio_id)
+            ticker_ids = Position.objects.filter(portfolio_id=portfolio_id).values_list('watchlist_id', flat=True)
+            queryset = Alert.objects.filter(ticker_id__in=ticker_ids).select_related('ticker').order_by('-created_at')
+
+            alert_type = request.query_params.get('alert_type')
+            if alert_type and alert_type != 'ALL':
+                queryset = queryset.filter(alert_type=alert_type)
+
+            acknowledged = request.query_params.get('acknowledged')
+            if acknowledged is not None and acknowledged != 'ALL':
+                is_ack = str(acknowledged).lower() in ['true', '1', 'yes']
+                queryset = queryset.filter(is_acknowledged=is_ack)
+
+            paginator = AlertPagination()
+            page = paginator.paginate_queryset(queryset, request, view=self)
+            
+            serializer = AlertSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
+class AlertStatsView(APIView):
+    """VIEW 19: Returns aggregate alert stats for the last 30 days."""
+    permission_classes = []
+
+    def get(self, request, portfolio_id):
+        try:
+            get_object_or_404(Portfolio, id=portfolio_id)
+            ticker_ids = Position.objects.filter(portfolio_id=portfolio_id).values_list('watchlist_id', flat=True)
+            # Use get_ist_now() to match existing imports, which is timezone aware
+            cutoff_30d = get_ist_now() - timedelta(days=30)
+            
+            alerts = Alert.objects.filter(
+                ticker_id__in=ticker_ids,
+                created_at__gte=cutoff_30d
+            )
+
+            total_alerts = alerts.count()
+            acknowledged_count = sum(1 for a in alerts if a.is_acknowledged)
+            acknowledged_rate = (acknowledged_count / total_alerts) if total_alerts > 0 else 0.0
+
+            from collections import defaultdict
+            by_type = defaultdict(int)
+            by_severity = {'CRITICAL': 0, 'HIGH': 0, 'MEDIUM': 0, 'LOW': 0}
+            
+            for a in alerts:
+                by_type[a.alert_type] += 1
+                if 'CRITICAL' in a.alert_type:
+                    by_severity['CRITICAL'] += 1
+                elif 'HIGH' in a.alert_type or 'STOP_LOSS' in a.alert_type:
+                    by_severity['HIGH'] += 1
+                elif 'EVENT' in a.alert_type or 'OPPORTUNITY' in a.alert_type:
+                    by_severity['MEDIUM'] += 1
+                else:
+                    by_severity['LOW'] += 1
+
+            # Daily counts for last 14 days
+            cutoff_14d = get_ist_now() - timedelta(days=14)
+            alerts_14d = [a for a in alerts if a.created_at >= cutoff_14d]
+            
+            daily_map = defaultdict(lambda: {'count': 0, 'severity': 'LOW'})
+            for a in alerts_14d:
+                dt_str = a.created_at.date().isoformat()
+                daily_map[dt_str]['count'] += 1
+                
+                # Update dominant severity if higher
+                sev_hierarchy = {'CRITICAL': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1}
+                a_sev = 'LOW'
+                if 'CRITICAL' in a.alert_type: a_sev = 'CRITICAL'
+                elif 'HIGH' in a.alert_type or 'STOP_LOSS' in a.alert_type: a_sev = 'HIGH'
+                elif 'EVENT' in a.alert_type or 'OPPORTUNITY' in a.alert_type: a_sev = 'MEDIUM'
+                
+                if sev_hierarchy[a_sev] > sev_hierarchy[daily_map[dt_str]['severity']]:
+                    daily_map[dt_str]['severity'] = a_sev
+
+            daily_counts = []
+            for i in range(14):
+                d = (get_ist_now().date() - timedelta(days=13-i)).isoformat()
+                daily_counts.append({
+                    'date': d,
+                    'count': daily_map[d]['count'],
+                    'dominant_severity': daily_map[d]['severity']
+                })
+
+            return Response({
+                'total_alerts': total_alerts,
+                'unacknowledged': total_alerts - acknowledged_count,
+                'critical_count': by_severity['CRITICAL'],
+                'acknowledged_rate': round(acknowledged_rate, 2),
+                'by_severity': by_severity,
+                'by_type': dict(by_type),
+                'daily_counts': daily_counts
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
+from django.db.models import Max
+
+class MacroIndicatorView(APIView):
+    """VIEW 21: Returns latest value for each unique MacroIndicator."""
+    permission_classes = []
+
+    def get(self, request, portfolio_id):
+        try:
+            get_object_or_404(Portfolio, id=portfolio_id)
+            
+            # Annnotate latest date for each indicator
+            latest_indicators = MacroIndicator.objects.values('indicator_name').annotate(latest_date=Max('date'))
+            
+            records = []
+            for item in latest_indicators:
+                record = MacroIndicator.objects.filter(
+                    indicator_name=item['indicator_name'],
+                    date=item['latest_date']
+                ).first()
+                if record:
+                    records.append(record)
+                    
+            serializer = MacroIndicatorSerializer(records, many=True)
+            return Response(serializer.data)
         except Exception as e:
             return Response({'error': str(e)}, status=500)
 

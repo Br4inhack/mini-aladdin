@@ -1,104 +1,351 @@
 {% extends 'dashboard/base.html' %}
+{% load static %}
 
-{% block title %}CRPMS — Backtest{% endblock %}
-{% block page_title %}Backtest Runner{% endblock %}
-{% block page_subtitle %}Risk-Aware Phase 1 Strategy · Historical Simulation{% endblock %}
+{% block title %}Backtest Runner — CRPMS{% endblock %}
+{% block page_title %}Backtesting Engine{% endblock %}
+{% block page_subtitle %}Test algorithms against historical data{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div x-data="backtestApp(1)" x-init="initApp()" x-cloak class="css-grid" style="grid-template-columns: 3fr 9fr; align-items: start;">
 
-  <!-- Run form -->
-  <div class="bg-white rounded-xl border border-gray-200 p-6 max-w-lg">
-    <h2 class="font-semibold text-gray-800 mb-4">Run New Backtest</h2>
-    <form id="backtest-form" class="space-y-4">
-      <div class="grid grid-cols-2 gap-4">
+  <!-- ── LEFT SIDEBAR: History ─────────────────────────────────────────── -->
+  <div class="card" style="min-height: calc(100vh - 140px);">
+    <div class="section-title text-muted text-sm" style="margin-bottom:16px;">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Run History
+    </div>
+    
+    <div x-show="loading" class="skeleton" style="height:400px; border-radius:8px;"></div>
+    <div class="text-muted text-sm c" x-show="!loading && !history.length" style="padding:24px 0;">No past runs found.</div>
+
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <template x-for="run in history" :key="run.id">
+        <div @click="selectRun(run.id)" 
+             style="padding:12px; border-radius:8px; cursor:pointer; border:1px solid transparent; transition:all 0.2s; display:flex; justify-content:space-between; align-items:center;"
+             :style="selectedId === run.id ? 'background:var(--bg-active); border-color:var(--accent-blue);' : 'background:var(--bg-surface);'">
+          <div>
+            <div style="font-size:13px; font-weight:600; color:var(--text-main);" x-text="run.run_name || ('Run #' + run.id)"></div>
+            <div style="font-size:11px; color:var(--text-muted); margin-top:4px;" x-text="formatDate(run.created_at)"></div>
+          </div>
+          <div class="badge" 
+               :style="(run.cagr >= 0) ? 'background:rgba(16,185,129,0.1); color:var(--accent-green);' : 'background:rgba(239,68,68,0.1); color:var(--accent-red);'"
+               x-text="(run.cagr >= 0 ? '+' : '') + parseFloat(run.cagr || 0).toFixed(2) + '%'"></div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ── RIGHT CONTENT ─────────────────────────────────────────────────── -->
+  <div style="display:flex; flex-direction:column; gap:24px;">
+
+    <!-- TOP SECTION: Form -->
+    <div class="card" style="padding:20px 24px;">
+      <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;">
         <div>
-          <label class="block text-xs text-gray-500 mb-1" for="start_date">Start Date</label>
-          <input id="start_date" type="date" value="2024-01-01"
-                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <label class="text-muted text-sm" style="display:block; margin-bottom:6px;">Start Date</label>
+          <input type="date" x-model="form.start" class="pill-select" style="min-width:140px;">
         </div>
         <div>
-          <label class="block text-xs text-gray-500 mb-1" for="end_date">End Date</label>
-          <input id="end_date" type="date" value="2024-12-31"
-                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <label class="text-muted text-sm" style="display:block; margin-bottom:6px;">End Date</label>
+          <input type="date" x-model="form.end" class="pill-select" style="min-width:140px;">
+        </div>
+        <button class="btn-action bg-blue-sm text-blue" style="border-color:var(--accent-blue); display:flex; align-items:center; gap:8px;" 
+                @click="runBacktest" :disabled="running">
+          <svg x-show="!running" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <div x-show="running" class="spinner" style="width:14px; height:14px; border-color:var(--accent-blue); border-bottom-color:transparent;"></div>
+          <span x-text="running ? 'Queued / Running...' : 'Run Backtest'"></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MAIN DASHBOARD (Visible if run selected) -->
+    <div x-show="selectedId" style="display:flex; flex-direction:column; gap:24px;">
+      
+      <!-- MIDDLE SECTION: Chart -->
+      <div class="card">
+        <div class="section-title" style="display:flex; justify-content:space-between;">
+          <div style="display:flex; align-items:center;">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 13v-1m4 1v-3m4 3V8M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+            Strategy vs Benchmark
+          </div>
+          <!-- Dropdown requested in prompt to switch between past results from chart header -->
+          <select x-model="selectedId" @change="selectRun(parseInt($event.target.value))" class="pill-select" style="min-width:200px; font-weight:normal;">
+            <template x-for="r in history" :key="r.id">
+              <option :value="r.id" x-text="(r.run_name || 'Run #' + r.id) + ' (' + formatDate(r.created_at) + ')'"></option>
+            </template>
+          </select>
+        </div>
+        
+        <div style="height:280px; position:relative; margin-top:20px;">
+          <canvas id="comparisonChart"></canvas>
         </div>
       </div>
-      <button type="submit"
-              class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2.5 px-4 rounded-lg transition-colors">
-        Run Backtest
-      </button>
-    </form>
-    <div id="run-status" class="mt-4 text-sm"></div>
-  </div>
 
-  <!-- Results table -->
-  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-100">
-      <h2 class="font-semibold text-gray-800">Backtest Results</h2>
+      <!-- BOTTOM SECTION: Stats Table -->
+      <div class="card">
+        <div class="section-title">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          Metrics Comparison
+        </div>
+        
+        <div class="table-container" style="margin-top:16px;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:30%;">Metric</th>
+                <th class="c" style="width:35%; border-bottom:2px solid var(--accent-blue);">Strategy</th>
+                <th class="c" style="width:35%;">Benchmark</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-muted">Total Return (CAGR)</td>
+                <td class="c mono" :class="isStrategyWin('cagr') ? 'text-green font-bold' : ''" x-text="formatPct(selectedRun.cagr)"></td>
+                <td class="c mono" :class="isBenchmarkWin('cagr') ? 'text-green font-bold' : ''" x-text="formatPct((selectedRun.benchmark_results||{}).cagr)"></td>
+              </tr>
+              <tr>
+                <td class="text-muted">Sharpe Ratio</td>
+                <td class="c mono" :class="isStrategyWin('sharpe_ratio') ? 'text-green font-bold' : ''" x-text="formatFloat(selectedRun.sharpe_ratio)"></td>
+                <td class="c mono" :class="isBenchmarkWin('sharpe_ratio') ? 'text-green font-bold' : ''" x-text="formatFloat((selectedRun.benchmark_results||{}).sharpe_ratio)"></td>
+              </tr>
+              <tr>
+                <td class="text-muted">Max Drawdown <span style="font-size:10px;">(Lower is better) 👇</span></td>
+                <!-- Drawdown is negative, so greater (closer to 0) is better -->
+                <td class="c mono" :class="isStrategyWinDrawdown() ? 'text-green font-bold' : ''" x-text="formatPct(selectedRun.max_drawdown)"></td>
+                <td class="c mono" :class="isBenchmarkWinDrawdown() ? 'text-green font-bold' : ''" x-text="formatPct((selectedRun.benchmark_results||{}).max_drawdown)"></td>
+              </tr>
+              <tr>
+                <td class="text-muted">Run Period</td>
+                <td class="c mono text-sm" colspan="2" style="background:var(--bg-surface);">
+                  <span x-text="selectedRun.start_date"></span> &nbsp;&rarr;&nbsp; <span x-text="selectedRun.end_date"></span>
+                </td>
+              </tr>
+              <tr>
+                <td class="text-muted">Notes</td>
+                <td colspan="2" class="text-sm text-muted">
+                  <div x-show="selectedRun.config?.tickers_tested">
+                    <span class="font-bold text-main">Tickers:</span> <span x-text="selectedRun.config?.tickers_tested"></span>
+                  </div>
+                  <div x-show="selectedRun.config?.data_source">
+                    <span class="font-bold text-main">Source:</span> <span x-text="selectedRun.config?.data_source"></span>
+                  </div>
+                  <div x-show="!selectedRun.config?.tickers_tested && !selectedRun.config?.data_source">
+                    No run notes available.
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
     </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-          <tr>
-            <th class="px-6 py-3 text-left">Strategy</th>
-            <th class="px-6 py-3 text-left">Period</th>
-            <th class="px-6 py-3 text-right">CAGR %</th>
-            <th class="px-6 py-3 text-right">Sharpe</th>
-            <th class="px-6 py-3 text-right">Max DD %</th>
-            <th class="px-6 py-3 text-right">Benchmark %</th>
-          </tr>
-        </thead>
-        <tbody id="results-tbody">
-          <tr><td colspan="6" class="px-6 py-8 text-center text-gray-400">Loading results…</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 
+  </div>
 </div>
+
+<style>
+  .pill-select { background:var(--bg-surface); border:1px solid var(--border-light); color:var(--text-main); font-size:13px; font-family:inherit; padding:6px 12px; border-radius:8px; outline:none; cursor:pointer; }
+  .pill-select:focus { border-color:var(--accent-blue); }
+  .pill-select option { background:var(--bg-sidebar); }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor:pointer; }
+  .spinner { border: 2px solid rgba(255,255,255,0.1); border-radius: 50%; border-top-color: var(--accent-blue); animation: spin 1s ease-in-out infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .font-bold { font-weight: 700; }
+  .text-green { color: var(--accent-green); }
+</style>
 {% endblock %}
 
 {% block scripts %}
 <script>
-const PID = {{ portfolio_id }};
+function backtestApp(pid) {
+  return {
+    portfolioId: pid,
+    loading: true,
+    running: false,
+    history: [],
+    selectedId: null,
+    selectedRun: {},
+    _chart: null,
+    _pollTimer: null,
+    
+    form: {
+      start: '',
+      end: ''
+    },
 
-async function loadResults() {
-  const r = await fetch(`/api/portfolio/${PID}/backtest-results/`);
-  const results = await r.json();
-  const tbody = document.getElementById('results-tbody');
-  if (!results.length) { tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-400">No backtests run yet</td></tr>'; return; }
-  tbody.innerHTML = results.map(b => `
-    <tr class="hover:bg-gray-50">
-      <td class="px-6 py-3 font-medium text-gray-900">${b.run_name}</td>
-      <td class="px-6 py-3 text-gray-500">${b.start_date} → ${b.end_date}</td>
-      <td class="px-6 py-3 text-right font-medium ${b.cagr >= 0 ? 'text-green-600' : 'text-red-600'}">${Number(b.cagr).toFixed(2)}%</td>
-      <td class="px-6 py-3 text-right text-gray-600">${Number(b.sharpe_ratio).toFixed(3)}</td>
-      <td class="px-6 py-3 text-right text-red-500">${Number(b.max_drawdown).toFixed(2)}%</td>
-      <td class="px-6 py-3 text-right text-gray-600">${b.benchmark_results?.benchmark_return?.toFixed(2) ?? '—'}%</td>
-    </tr>`).join('');
+    initApp() {
+      // Default dates: today - 90 down to today
+      const end = new Date();
+      const start = new Date(end.getTime() - (90 * 24 * 60 * 60 * 1000));
+      this.form.end = end.toISOString().split('T')[0];
+      this.form.start = start.toISOString().split('T')[0];
+
+      this.loadHistory();
+    },
+
+    async loadHistory(autoSelectLatest = true) {
+      try {
+        const res = await fetch(`/api/portfolio/${this.portfolioId}/backtest-results/`).then(r => r.json());
+        this.history = Array.isArray(res) ? res : (res.results || []);
+        this.loading = false;
+        
+        if (this.history.length > 0 && autoSelectLatest) {
+          this.selectRun(this.history[0].id);
+        }
+        return this.history.length;
+      } catch(e) { console.error('Failed to load history', e); this.loading = false; return 0; }
+    },
+
+    async selectRun(id) {
+      this.selectedId = id;
+      try {
+        const run = await fetch(`/api/portfolio/${this.portfolioId}/backtest-results/${id}/`).then(r => r.json());
+        this.selectedRun = run;
+        this.renderChart();
+      } catch(e) { console.error('Failed to load detail', e); }
+    },
+
+    async runBacktest() {
+      if (this.running) return;
+      this.running = true;
+      
+      try {
+        const payload = new FormData();
+        payload.append('start_date', this.form.start);
+        payload.append('end_date', this.form.end);
+        
+        await fetch(`/api/portfolio/${this.portfolioId}/run-backtest/`, {
+          method: 'POST',
+          headers: {'X-CSRFToken': this.getCookie('csrftoken')},
+          body: payload
+        });
+        
+        // Start polling
+        const initialCount = this.history.length;
+        this._pollTimer = setInterval(async () => {
+          const newCount = await this.loadHistory(false);
+          if (newCount > initialCount) {
+             // New result appeared!
+             clearInterval(this._pollTimer);
+             this.running = false;
+             this.selectRun(this.history[0].id); // Auto select new
+          }
+        }, 3000);
+        
+      } catch(e) { 
+        console.error('Run failed', e); 
+        this.running = false; 
+      }
+    },
+
+    renderChart() {
+      const canvas = document.getElementById('comparisonChart');
+      if (!canvas) return;
+      if (this._chart) this._chart.destroy();
+
+      const strat = this.selectedRun;
+      const bmark = strat.benchmark_results || {};
+
+      const dataStrategy = [
+        parseFloat(strat.cagr || 0),
+        parseFloat(strat.max_drawdown || 0),
+        parseFloat(strat.sharpe_ratio || 0)
+      ];
+
+      const dataBmark = [
+        parseFloat(bmark.cagr || 0),
+        parseFloat(bmark.max_drawdown || 0),
+        parseFloat(bmark.sharpe_ratio || 0)
+      ];
+
+      this._chart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: ['Total Return (CAGR) %', 'Max Drawdown % \u2193', 'Sharpe Ratio'],
+          datasets: [
+            {
+              label: 'Strategy',
+              data: dataStrategy,
+              backgroundColor: '#3b82f6',
+              borderRadius: 4,
+              barPercentage: 0.8,
+              categoryPercentage: 0.5
+            },
+            {
+              label: 'Benchmark',
+              data: dataBmark,
+              backgroundColor: '#6b7280',
+              borderRadius: 4,
+              barPercentage: 0.8,
+              categoryPercentage: 0.5
+            }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#9ca3af' } },
+            y: { grid: { color: 'rgba(75,85,99,0.3)' }, ticks: { color: '#9ca3af' } }
+          },
+          plugins: {
+            legend: { labels: { color: '#9ca3af', padding: 20, usePointStyle: true } }
+          }
+        }
+      });
+    },
+
+    // ── Utility Methods ─────────────────────────────────
+    formatDate(iso) {
+      if(!iso) return '';
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-IN', {day:'2-digit', month:'short'}) + ' ' + d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:false});
+    },
+    formatPct(num) {
+      if(num == null) return '—';
+      return parseFloat(num).toFixed(2) + '%';
+    },
+    formatFloat(num) {
+      if(num == null) return '—';
+      return parseFloat(num).toFixed(3);
+    },
+    isStrategyWin(key) {
+      const s = parseFloat(this.selectedRun[key] || 0);
+      const b = parseFloat((this.selectedRun.benchmark_results||{})[key] || 0);
+      return s > b;
+    },
+    isBenchmarkWin(key) {
+      const s = parseFloat(this.selectedRun[key] || 0);
+      const b = parseFloat((this.selectedRun.benchmark_results||{})[key] || 0);
+      return b > s;
+    },
+    isStrategyWinDrawdown() {
+      // Drawdown is typically negative, so a higher value (less negative, closer to 0) is better.
+      const s = parseFloat(this.selectedRun.max_drawdown || 0);
+      const b = parseFloat((this.selectedRun.benchmark_results||{}).max_drawdown || -100);
+      return s > b; // e.g. -10 > -20
+    },
+    isBenchmarkWinDrawdown() {
+      const s = parseFloat(this.selectedRun.max_drawdown || 0);
+      const b = parseFloat((this.selectedRun.benchmark_results||{}).max_drawdown || 0);
+      return b > s;
+    },
+    getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+  };
 }
-
-document.getElementById('backtest-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const status = document.getElementById('run-status');
-  status.textContent = 'Queuing backtest…';
-  try {
-    const r = await fetch(`/api/portfolio/${PID}/run-backtest/`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
-      body: JSON.stringify({
-        start_date: document.getElementById('start_date').value,
-        end_date: document.getElementById('end_date').value,
-      })
-    });
-    const d = await r.json();
-    status.innerHTML = `<span class="text-green-600">✓ ${d.message || d.status}</span>`;
-    setTimeout(loadResults, 2000);
-  } catch(err) {
-    status.innerHTML = `<span class="text-red-600">Error: ${err.message}</span>`;
-  }
-});
-
-loadResults();
 </script>
 {% endblock %}

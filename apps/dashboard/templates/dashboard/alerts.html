@@ -1,56 +1,391 @@
 {% extends 'dashboard/base.html' %}
+{% load static %}
 
-{% block title %}CRPMS — Alerts{% endblock %}
-{% block page_title %}Alert History{% endblock %}
-{% block page_subtitle %}System-generated risk, sentiment & data-quality alerts{% endblock %}
+{% block title %}Alert Management — CRPMS{% endblock %}
+{% block page_title %}Alert Management{% endblock %}
+{% block page_subtitle %}Comprehensive portfolio notifications & risk flags{% endblock %}
 
 {% block content %}
-<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-  <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-    <h2 class="font-semibold text-gray-800">Active Alerts</h2>
-    <span class="text-xs text-gray-400" id="alert-count">Loading…</span>
+<div x-data="alertsData(1)" x-init="initAlerts()" x-cloak>
+
+  <!-- ── TOP ROW: Stats Summary ──────────────────────────────────────── -->
+  <div class="css-grid grid-cols-4">
+    <!-- Total Alerts 30d -->
+    <div class="card">
+      <div class="section-title text-muted text-sm" style="margin-bottom:8px;">Total Alerts (30d)</div>
+      <div class="card-value mono" style="font-size:26px; font-weight:700;" x-text="statsLoading ? '...' : stats.total_alerts"></div>
+    </div>
+    <!-- Critical Alerts -->
+    <div class="card" :style="stats.critical_count > 0 ? 'box-shadow: 0 4px 20px rgba(239,68,68,0.1)' : ''">
+      <div class="section-title text-muted text-sm" style="margin-bottom:8px;">Critical Count</div>
+      <div class="card-value mono" style="font-size:26px; font-weight:700;" :class="stats.critical_count > 0 ? 'text-red' : 'text-main'" x-text="statsLoading ? '...' : stats.critical_count"></div>
+    </div>
+    <!-- Unacknowledged -->
+    <div class="card">
+      <div class="section-title text-muted text-sm" style="margin-bottom:8px;">Unacknowledged</div>
+      <div class="card-value mono" style="font-size:26px; font-weight:700; color:var(--accent-yellow);" x-text="statsLoading ? '...' : stats.unacknowledged"></div>
+    </div>
+    <!-- Acknowledge Rate -->
+    <div class="card">
+      <div class="section-title text-muted text-sm" style="margin-bottom:8px;">Acknowledge Rate</div>
+      <div class="card-value mono" style="font-size:26px; font-weight:700;" x-text="statsLoading ? '...' : Math.round((stats.acknowledged_rate || 0) * 100) + '%'"></div>
+      <div class="progress-track">
+        <div class="progress-fill" style="background:var(--accent-blue);" :style="`width: ${(stats.acknowledged_rate || 0) * 100}%`"></div>
+      </div>
+    </div>
   </div>
-  <ul id="alerts-list" class="divide-y divide-gray-100">
-    <li class="px-6 py-6 text-sm text-gray-400 text-center">Loading alerts…</li>
-  </ul>
+
+  <!-- ── SECOND ROW: Alert Frequency Bar Chart ─────────────────────── -->
+  <div class="card" style="margin-bottom:24px;">
+    <div class="section-title">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Alert Frequency (14 days)
+    </div>
+    <div style="height:120px; position:relative;">
+      <div id="chart-skeleton" class="skeleton" style="height:100%; border-radius:8px;" x-show="statsLoading"></div>
+      <canvas id="alertBarChart" x-show="!statsLoading" style="opacity:0; transition:opacity 0.4s;"></canvas>
+    </div>
+  </div>
+
+  <!-- ── THIRD ROW: Filters Bar ────────────────────────────────────────── -->
+  <div class="card" style="margin-bottom:24px; padding:16px 24px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+      
+      <div style="display:flex; gap:24px; flex-wrap:wrap;">
+        <!-- Severity Filter -->
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="text-sm text-muted">Severity:</span>
+          <select x-model="filters.severity" @change="filterChanged" class="pill-select">
+            <option value="ALL">All</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+        </div>
+        
+        <!-- Type Filter -->
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="text-sm text-muted">Type:</span>
+          <select x-model="filters.alert_type" @change="filterChanged" class="pill-select">
+            <option value="ALL">All</option>
+            <option value="RISK_CRITICAL">Risk Critical</option>
+            <option value="RISK_HIGH">Risk High</option>
+            <option value="OPPORTUNITY">Opportunity</option>
+            <option value="STOP_LOSS">Stop Loss</option>
+            <option value="EVENT_RISK">Event Risk</option>
+          </select>
+        </div>
+
+        <!-- Status Filter -->
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="text-sm text-muted">Status:</span>
+          <select x-model="filters.acknowledged" @change="filterChanged" class="pill-select">
+            <option value="ALL">All</option>
+            <option value="false">Unacknowledged</option>
+            <option value="true">Acknowledged</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Bulk Actions -->
+      <div style="display:flex; align-items:center; gap:16px;">
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;" class="text-sm">
+          <input type="checkbox" x-model="selectAll" @change="toggleSelectAll"> Select All
+        </label>
+        <button class="btn-action bg-blue-sm text-blue" style="border-color:var(--accent-blue);" @click="bulkAcknowledge" :disabled="!hasSelected">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          Acknowledge Selected
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MAIN TABLE: Alert History ─────────────────────────────────────── -->
+  <div class="card">
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px;"></th>
+            <th style="width:100px;">Severity</th>
+            <th>Type / Ticker</th>
+            <th>Message</th>
+            <th class="c">Time</th>
+            <th class="c">Status</th>
+            <th class="r">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr x-show="historyLoading"><td colspan="7"><div class="skeleton" style="height:400px; border-radius:6px;"></div></td></tr>
+          <tr x-show="!historyLoading && !history.length">
+            <td colspan="7" class="c text-muted" style="padding:32px;">No alerts found matching filters.</td>
+          </tr>
+          
+          <template x-for="alert in history" :key="alert.id">
+            <tr :class="alert.is_acknowledged ? 'opacity-70' : ''">
+              <td>
+                <input type="checkbox" :value="alert.id" x-model="selectedAlerts" :disabled="alert.is_acknowledged">
+              </td>
+              
+              <td>
+                <div class="badge" :style="getSeverityBadge(alert.alert_type).style" x-text="getSeverityBadge(alert.alert_type).text"></div>
+              </td>
+              
+              <td>
+                <div style="font-weight:600; color:var(--text-main);" x-text="(alert.ticker?.ticker || alert.ticker)"></div>
+                <div class="text-sm text-muted" x-text="formatType(alert.alert_type)"></div>
+              </td>
+              
+              <td>
+                <div style="max-width:400px; white-space:normal; line-height:1.4;" 
+                     class="text-sm"
+                     :style="alert.is_acknowledged ? 'text-decoration:line-through; color:var(--text-muted);' : ''"
+                     x-text="alert.message"></div>
+                <div class="text-muted" style="font-size:11px; margin-top:4px;" x-show="alert.threshold_breached !== null">
+                  Value triggered: <span class="mono" x-text="alert.threshold_breached"></span>
+                </div>
+              </td>
+              
+              <td class="c text-muted text-sm mono">
+                <div><span x-text="new Date(alert.created_at).toLocaleDateString('en-IN', {day:'2-digit', month:'short'})"></span></div>
+                <div><span x-text="new Date(alert.created_at).toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'})"></span></div>
+              </td>
+              
+              <td class="c">
+                <span class="badge" :style="alert.is_acknowledged ? 'background:rgba(107,114,128,0.1); color:var(--text-muted);' : 'background:rgba(245,158,11,0.1); color:var(--accent-yellow);'"
+                      x-text="alert.is_acknowledged ? 'Acknowledged' : 'Pending'"></span>
+              </td>
+              
+              <td class="r">
+                <button class="btn-action text-sm" @click="acknowledgeAlert(alert.id)" x-show="!alert.is_acknowledged">
+                  Resolve
+                </button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Pagination -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1px solid var(--border-light); padding-top:16px;">
+      <div class="text-sm text-muted">
+        Total: <span x-text="totalCount"></span> | Page <span x-text="filters.page"></span>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-action" @click="prevPage" :disabled="!hasPrev" :style="!hasPrev ? 'opacity:0.5; pointer-events:none;' : ''">&larr; Prev</button>
+        <button class="btn-action" @click="nextPage" :disabled="!hasNext" :style="!hasNext ? 'opacity:0.5; pointer-events:none;' : ''">Next &rarr;</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}
 
 {% block scripts %}
+<style>
+  .pill-select { background:var(--bg-surface); border:1px solid var(--border-light); color:var(--text-main); font-size:13px; font-family:inherit; padding:6px 12px; border-radius:8px; outline:none; cursor:pointer; }
+  .pill-select:focus { border-color:var(--accent-blue); }
+  .pill-select option { background:var(--bg-sidebar); }
+  .opacity-70 { opacity:0.7; }
+</style>
+
 <script>
-const PID = {{ portfolio_id }};
+function alertsData(pid) {
+  return {
+    portfolioId: pid,
+    statsLoading: true,
+    historyLoading: true,
+    stats: {},
+    history: [],
+    totalCount: 0,
+    hasNext: false,
+    hasPrev: false,
+    _chart: null,
+    
+    // Filters and state
+    filters: {
+      severity: 'ALL',
+      alert_type: 'ALL',
+      acknowledged: 'ALL',
+      page: 1
+    },
+    
+    selectedAlerts: [],
+    
+    get selectAll() {
+      const active = this.history.filter(a => !a.is_acknowledged);
+      return active.length > 0 && this.selectedAlerts.length === active.length;
+    },
+    
+    set selectAll(val) {
+      if (val) {
+        this.selectedAlerts = this.history.filter(a => !a.is_acknowledged).map(a => a.id);
+      } else {
+        this.selectedAlerts = [];
+      }
+    },
+    
+    get hasSelected() {
+      return this.selectedAlerts.length > 0;
+    },
 
-async function loadAlerts() {
-  const r = await fetch(`/api/portfolio/${PID}/alerts/`);
-  const alerts = await r.json();
-  document.getElementById('alert-count').textContent = `${alerts.length} unacknowledged`;
-  const list = document.getElementById('alerts-list');
-  if (!alerts.length) { list.innerHTML = '<li class="px-6 py-6 text-sm text-gray-400 text-center">No active alerts 🎉</li>'; return; }
-  list.innerHTML = alerts.map(a => `
-    <li class="px-6 py-4 flex items-start gap-4" id="alert-${a.id}">
-      <div class="flex-1">
-        <div class="flex items-center gap-2 mb-1">
-          <span class="px-2 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700">${a.alert_type}</span>
-          ${a.ticker ? `<span class="text-xs font-mono text-blue-600">${a.ticker.ticker}</span>` : ''}
-          <span class="text-xs text-gray-400 ml-auto">${a.created_at ? new Date(a.created_at).toLocaleString('en-IN') : ''}</span>
-        </div>
-        <p class="text-sm text-gray-700">${a.message}</p>
-      </div>
-      <button onclick="acknowledge(${a.id})"
-              class="flex-shrink-0 text-xs bg-gray-100 hover:bg-green-100 hover:text-green-700 text-gray-500 px-3 py-1.5 rounded-lg transition-colors">
-        Dismiss
-      </button>
-    </li>`).join('');
+    async initAlerts() {
+      this.loadStats();
+      this.loadHistory();
+    },
+
+    async loadStats() {
+      this.statsLoading = true;
+      try {
+        const res = await fetch(`/api/portfolio/${this.portfolioId}/alerts/stats/`).then(r => r.json());
+        this.stats = res;
+        this.statsLoading = false;
+        
+        setTimeout(() => this.initBarChart(res.daily_counts), 50);
+      } catch(e) { console.error('Stats diff', e); this.statsLoading = false; }
+    },
+
+    async loadHistory() {
+      this.historyLoading = true;
+      this.selectedAlerts = [];
+      try {
+        const p = new URLSearchParams();
+        if (this.filters.severity !== 'ALL') p.append('alert_type', this.filters.severity);
+        // Note: the backend actually maps alert_type to exact choices. For severity we didn't add a true severity param,
+        // so we'll pass severity filter manually or leave it to type. Actually, let's just send alert_type.
+        // If type is not ALL, send it. If severity is not ALL, that would require custom backend logic.
+        // Wait, since AlertType maps 1:1, we can just use alert_type.
+        
+        if (this.filters.alert_type !== 'ALL') p.append('alert_type', this.filters.alert_type);
+        if (this.filters.acknowledged !== 'ALL') p.append('acknowledged', this.filters.acknowledged);
+        p.append('page', this.filters.page);
+
+        const url = `/api/portfolio/${this.portfolioId}/alerts/history/?${p.toString()}`;
+        const res = await fetch(url).then(r => r.json());
+        
+        this.history = res.results || [];
+        this.totalCount = res.count || 0;
+        this.hasNext = !!res.next;
+        this.hasPrev = !!res.previous;
+        
+        this.historyLoading = false;
+      } catch(e) { console.error('History diff', e); this.historyLoading = false; }
+    },
+
+    filterChanged() {
+      this.filters.page = 1;
+      this.loadHistory();
+    },
+
+    nextPage() {
+      if(this.hasNext) { this.filters.page++; this.loadHistory(); }
+    },
+
+    prevPage() {
+      if(this.hasPrev) { this.filters.page--; this.loadHistory(); }
+    },
+
+    async acknowledgeAlert(id) {
+      if (!id) return;
+      try {
+        await fetch(`/api/portfolio/${this.portfolioId}/alerts/${id}/acknowledge/`, {
+          method: 'POST',
+          headers: {'X-CSRFToken': this.getCookie('csrftoken')}
+        });
+        // Quick local update
+        const idx = this.history.findIndex(a => a.id === id);
+        if (idx !== -1) this.history[idx].is_acknowledged = true;
+        this.stats.unacknowledged = Math.max(0, this.stats.unacknowledged - 1);
+      } catch(e) { console.error(e); }
+    },
+
+    async bulkAcknowledge() {
+      if(!this.selectedAlerts.length) return;
+      for (const id of this.selectedAlerts) {
+        await this.acknowledgeAlert(id);
+      }
+      this.selectedAlerts = [];
+    },
+
+    // Utilities
+    getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    },
+
+    formatType(typeStr) {
+      return (typeStr||'').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+    },
+
+    getSeverityBadge(typeStr) {
+      const type = typeStr || '';
+      if (type.includes('CRITICAL')) {
+        return { style: 'background:rgba(220,38,38,0.2); border:1px solid #dc2626; color:#f87171;', text: 'CRITICAL' };
+      }
+      if (type.includes('HIGH') || type.includes('STOP_LOSS')) {
+        return { style: 'background:rgba(239,68,68,0.1); border:1px solid #ef4444; color:#ef4444;', text: 'HIGH' };
+      }
+      if (type.includes('EVENT') || type.includes('OPPORTUNITY')) {
+        return { style: 'background:rgba(245,158,11,0.1); border:1px solid #f59e0b; color:#f59e0b;', text: 'MEDIUM' };
+      }
+      return { style: 'background:rgba(107,114,128,0.1); border:1px solid #9ca3af; color:#9ca3af;', text: 'LOW' };
+    },
+
+    initBarChart(daily) {
+      if(!daily || !daily.length) return;
+      
+      const canvas = document.getElementById('alertBarChart');
+      if (!canvas) return;
+      canvas.style.opacity = 1;
+
+      if (this._chart) { this._chart.destroy(); }
+
+      const sevColorMap = {
+        'CRITICAL': '#ef4444', 
+        'HIGH': '#f97316',
+        'MEDIUM': '#f59e0b',
+        'LOW': '#3b82f6'
+      };
+
+      const labels = daily.map(d => d.date.substring(5)); // MM-DD
+      const data = daily.map(d => d.count);
+      const bgColors = daily.map(d => sevColorMap[d.dominant_severity] || '#3b82f6');
+
+      this._chart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: bgColors,
+            borderRadius: 4,
+            barPercentage: 0.6
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          animation: { duration: 400 },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#6b7280', font: { size: 10 } } },
+            y: { grid: { color: 'rgba(75,85,99,0.2)', drawBorder: false }, ticks: { color: '#6b7280', stepSize: 1, precision: 0 } }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+  };
 }
-
-async function acknowledge(alertId) {
-  await fetch(`/api/portfolio/${PID}/alerts/${alertId}/acknowledge/`, {
-    method: 'POST',
-    headers: {'X-CSRFToken': '{{ csrf_token }}'}
-  });
-  document.getElementById(`alert-${alertId}`)?.remove();
-}
-
-loadAlerts();
 </script>
 {% endblock %}

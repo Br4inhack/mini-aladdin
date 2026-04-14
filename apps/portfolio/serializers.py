@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.portfolio.models import (
+    MacroIndicator,
     Watchlist, Portfolio, Position, AgentOutput,
     DecisionLog, Alert, PriceHistory, NewsArticle,
     BacktestResult, PortfolioStateSnapshot
@@ -181,3 +182,37 @@ class BacktestResultSerializer(serializers.ModelSerializer):
             'id', 'run_name', 'start_date', 'end_date', 'cagr',
             'sharpe_ratio', 'max_drawdown', 'benchmark_results', 'created_at'
         ]
+
+class MacroIndicatorSerializer(serializers.ModelSerializer):
+    formatted_value = serializers.SerializerMethodField()
+    trend = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MacroIndicator
+        fields = ['indicator_name', 'value', 'date', 'source', 'formatted_value', 'trend']
+
+    def get_formatted_value(self, obj):
+        name = (obj.indicator_name or '').lower()
+        val = obj.value
+        if val is None:
+            return '—'
+        if 'rate' in name:
+            return f"{float(val):.2f}%"
+        if 'gdp' in name:
+            # Assuming value is in trillions for formatting, or needs T
+            return f"{float(val):.2f}T"
+        return f"{float(val):.2f}"
+
+    def get_trend(self, obj):
+        # Find the previous record for this indicator
+        prev = MacroIndicator.objects.filter(
+            indicator_name=obj.indicator_name,
+            date__lt=obj.date
+        ).order_by('-date').first()
+        if not prev or prev.value is None or obj.value is None:
+            return 'FLAT'
+        if obj.value > prev.value:
+            return 'UP'
+        elif obj.value < prev.value:
+            return 'DOWN'
+        return 'FLAT'

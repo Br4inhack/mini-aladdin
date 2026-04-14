@@ -15,4 +15,5 @@ urlpatterns = [
     path('decisions/', views.TradeLogView.as_view(), name='trade_logs'),
     path('backtest/', views.BacktestView.as_view(), name='backtest'),
     path('alerts/', views.AlertHistoryView.as_view(), name='alerts'),
+    path('settings/', views.SettingsView.as_view(), name='settings'),
 ]
