@@ -26,6 +26,9 @@ urlpatterns = [
 
     path('watchlist/opportunities/', api_views.WatchlistOpportunitiesView.as_view(), name='api-watchlist-opportunities'),
     path('asset/<str:ticker_symbol>/history/', api_views.AssetHistoryView.as_view(), name='api-asset-history'),
+    path('portfolio/<int:portfolio_id>/sentiment-trend/<str:ticker_symbol>/', api_views.SentimentTrendView.as_view(), name='api-sentiment-trend'),
+    path('portfolio/<int:portfolio_id>/sector-exposure/', api_views.SectorExposureView.as_view(), name='api-sector-exposure'),
+    path('portfolio/<int:portfolio_id>/pnl-trend/', api_views.PnLTrendView.as_view(), name='api-pnl-trend'),
 
     path('health/', api_views.HealthCheckAPIView.as_view(), name='api-health'),
 ]

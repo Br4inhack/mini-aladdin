@@ -21,19 +21,19 @@
   </div>
 
   <!-- PnL -->
-  <div class="card interactive" :style="!loading && summary.total_pnl_pct >= 0 ? 'box-shadow: 0 4px 20px rgba(16,185,129,0.1)' : 'box-shadow: 0 4px 20px rgba(239,68,68,0.1)'">
+  <div id="ws-pnl-card" class="card interactive" :style="!loading && summary.total_pnl_pct >= 0 ? 'box-shadow: 0 4px 20px rgba(16,185,129,0.1)' : 'box-shadow: 0 4px 20px rgba(239,68,68,0.1)'">
     <div class="section-title text-muted text-sm" style="margin-bottom:8px;">
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
       Total PnL
     </div>
-    <div class="card-value mono" style="font-size:26px; font-weight:700;" :class="!loading && summary.total_pnl_pct >= 0 ? 'text-green' : 'text-red'" x-text="loading ? '...' : window.CRPMS.pct(summary.total_pnl_pct)"></div>
+    <div class="card-value mono live-value" style="font-size:26px; font-weight:700;" :class="!loading && summary.total_pnl_pct >= 0 ? 'text-green' : 'text-red'" x-text="loading ? '...' : window.CRPMS.pct(summary.total_pnl_pct)"></div>
     <div class="text-sm" :class="!loading && summary.total_pnl_pct >= 0 ? 'text-green' : 'text-red'" style="margin-top:6px; font-weight:500;">
       <span x-text="!loading && summary.total_pnl_pct >= 0 ? '↑' : '↓'"></span>
       <span class="mono" x-text="loading ? '...' : window.CRPMS.inr(currentValue - summary.total_capital)"></span>
     </div>
   </div>
 
-  <!-- AI Risk Level -->
+  <!-- AI Risk Level — includes drawdown guard badge -->
   <div class="card interactive">
     <div class="section-title text-muted text-sm" style="margin-bottom:8px;">
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
@@ -42,6 +42,11 @@
     <div class="card-value mono" style="font-size:26px; font-weight:700;" 
          :style="!loading ? `color: ${window.CRPMS.riskConfig[portfolioRisk].text}` : ''"
          x-text="loading ? '...' : portfolioRisk"></div>
-    <div class="text-sm text-muted" style="margin-top:6px;">Algorithm derived exposure</div>
+    <div style="margin-top:8px;">
+      <span id="ws-drawdown-badge" class="badge"
+            :style="!loading && summary.drawdown_guard_active ? 'border:1px solid rgba(239,68,68,0.4); color:var(--accent-red);' : 'border:1px solid rgba(16,185,129,0.4); color:var(--accent-green);'"
+            x-text="!loading && summary.drawdown_guard_active ? 'ACTIVE' : 'INACTIVE'"></span>
+      <span class="text-muted text-sm" style="margin-left:6px;">Guard</span>
+    </div>
   </div>
 </div>

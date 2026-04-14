@@ -184,6 +184,20 @@
     .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%); background-size: 200%; animation: shimmer 1.5s infinite; border-radius: 6px; color: transparent !important; }
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+    /* WebSocket status dot */
+    .ws-status { display: flex; align-items: center; gap: 7px; padding: 6px 12px; border: 1px solid var(--border-light); border-radius: 8px; font-size: 12px; font-weight: 600; background: var(--bg-surface); transition: border-color 0.3s, color 0.3s; }
+    .ws-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; transition: background 0.3s, box-shadow 0.3s; }
+    .ws-dot.connected { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); animation: pulse 2s infinite; }
+    .ws-dot.connecting { background: var(--accent-yellow); box-shadow: 0 0 8px var(--accent-yellow); animation: pulse 1s infinite; }
+    .ws-dot.disconnected { background: var(--accent-red); box-shadow: 0 0 8px var(--accent-red); animation: none; }
+
+    /* Live value flash animations */
+    @keyframes flashGreen { 0%,100% { background: transparent; } 30% { background: rgba(16,185,129,0.18); } }
+    @keyframes flashRed   { 0%,100% { background: transparent; } 30% { background: rgba(239,68,68,0.18);  } }
+    .flash-green { animation: flashGreen 0.8s ease; }
+    .flash-red   { animation: flashRed   0.8s ease; }
+    .live-value  { transition: color 0.3s ease; }
+
   </style>
 </head>
 
@@ -245,6 +259,16 @@
       </div>
       <div class="topbar-right">
         
+        <!-- WebSocket Live Status Dot (Alpine reactive) -->
+        <div x-data x-init="$watch('$store.wsStatus', () => {})" class="ws-status">
+          <span class="ws-dot"
+                :class="$store.wsStatus === 'connected' ? 'connected' : $store.wsStatus === 'connecting' ? 'connecting' : 'disconnected'"
+          ></span>
+          <span :style="$store.wsStatus === 'connected' ? 'color:var(--accent-green)' : $store.wsStatus === 'connecting' ? 'color:var(--accent-yellow)' : 'color:var(--accent-red)'"
+                x-text="$store.wsStatus === 'connected' ? 'Live' : $store.wsStatus === 'connecting' ? 'Connecting…' : 'Offline'"
+          ></span>
+        </div>
+
         <button onclick="window.location.href='/api/portfolio/1/export/positions/csv/'" class="btn-action" title="Export Ledger as CSV">
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           Export CSV
@@ -301,6 +325,138 @@ if (typeof Chart !== 'undefined') {
   Chart.defaults.borderColor = 'rgba(55, 65, 81, 0.5)'; // border-light
   Chart.defaults.font.family = 'Inter';
 }
+</script>
+
+<!-- ── CRPMSSocket: WebSocket Manager ──────────────────────────────── -->
+<script>
+(function () {
+  'use strict';
+
+  // Initialise Alpine store before Alpine boots (Alpine.start fires on DOMContentLoaded)
+  document.addEventListener('alpine:init', function () {
+    Alpine.store('wsStatus', 'disconnected');
+  });
+
+  // Helper: update Alpine store safely (Alpine may not be ready yet)
+  function setWsStatus(status) {
+    if (window.Alpine && Alpine.store) {
+      Alpine.store('wsStatus', status);
+    }
+  }
+
+  var MAX_RECONNECT = 5;
+
+  window.CRPMSSocket = {
+    _ws:            null,
+    _portfolioId:   null,
+    _handlers:      [],   // registered portfolio_update callbacks
+    _reconnectCount: 0,
+    _reconnectTimer: null,
+    _currentStatus: 'disconnected',
+
+    // ── Public API ─────────────────────────────────────────────────────
+
+    /** Open connection. Idempotent — closes existing socket first. */
+    init: function (portfolioId) {
+      this._portfolioId = portfolioId;
+      this._reconnectCount = 0;
+      this._connect();
+    },
+
+    /** Register a callback for portfolio_update events. */
+    onUpdate: function (handler) {
+      if (typeof handler === 'function') this._handlers.push(handler);
+    },
+
+    /** Send a JSON payload to the server (if connected). */
+    send: function (data) {
+      if (this._ws && this._ws.readyState === WebSocket.OPEN) {
+        try { this._ws.send(JSON.stringify(data)); } catch (e) { console.warn('[WS] send failed:', e.message); }
+      }
+    },
+
+    /** Returns 'connected' | 'connecting' | 'disconnected' */
+    status: function () { return this._currentStatus; },
+
+    // ── Private ────────────────────────────────────────────────────────
+
+    _setStatus: function (s) {
+      this._currentStatus = s;
+      setWsStatus(s);
+    },
+
+    _connect: function () {
+      var self = this;
+      if (self._ws) {
+        try { self._ws.close(); } catch (_) {}
+      }
+
+      var protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      var url = protocol + '://' + window.location.host + '/ws/portfolio/' + self._portfolioId + '/';
+
+      self._setStatus('connecting');
+      console.log('[WS] Connecting to', url);
+
+      try {
+        self._ws = new WebSocket(url);
+      } catch (e) {
+        console.warn('[WS] WebSocket() threw:', e.message);
+        self._setStatus('disconnected');
+        return;
+      }
+
+      self._ws.onopen = function () {
+        console.log('[WS] Connected — portfolio', self._portfolioId);
+        self._reconnectCount = 0;
+        self._setStatus('connected');
+        // Start keep-alive pings every 25 s
+        self._pingInterval = setInterval(function () { self.send({ type: 'ping' }); }, 25000);
+      };
+
+      self._ws.onmessage = function (evt) {
+        var payload;
+        try { payload = JSON.parse(evt.data); } catch (e) {
+          console.warn('[WS] Malformed message ignored');
+          return;
+        }
+        // Dispatch by type
+        if (payload.type === 'portfolio_update' || payload.portfolio_id !== undefined) {
+          // The consumer sends event['data'] directly — treat it as the update payload
+          self._dispatch(payload);
+        }
+        // 'connection' and 'pong' frames are silently consumed
+      };
+
+      self._ws.onclose = function (evt) {
+        clearInterval(self._pingInterval);
+        if (self._reconnectCount < MAX_RECONNECT) {
+          self._reconnectCount++;
+          self._setStatus('connecting');
+          console.log('[WS] Closed (code=' + evt.code + ') — reconnect attempt', self._reconnectCount, 'of', MAX_RECONNECT, 'in 5 s…');
+          self._reconnectTimer = setTimeout(function () { self._connect(); }, 5000);
+        } else {
+          self._setStatus('disconnected');
+          console.warn('[WS] Max reconnect attempts reached. Falling back to REST polling.');
+        }
+      };
+
+      self._ws.onerror = function (e) {
+        // Do not surface raw error to user — just log
+        console.warn('[WS] Connection error. Will retry on close event.');
+        self._setStatus('connecting');
+      };
+    },
+
+    _dispatch: function (data) {
+      var self = this;
+      self._handlers.forEach(function (fn) {
+        try { fn(data); } catch (e) {
+          console.warn('[WS] Handler threw:', e.message);
+        }
+      });
+    }
+  };
+})();
 </script>
 
 {% block scripts %}{% endblock %}

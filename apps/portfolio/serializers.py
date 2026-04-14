@@ -131,10 +131,47 @@ class PriceHistorySerializer(serializers.ModelSerializer):
 
 class NewsArticleSerializer(serializers.ModelSerializer):
     ticker = WatchlistSerializer(source='ticker_tag', read_only=True)
+    sentiment_label = serializers.SerializerMethodField()
+    sentiment_strength = serializers.SerializerMethodField()
+    sentiment_color = serializers.SerializerMethodField()
 
     class Meta:
         model = NewsArticle
-        fields = ['id', 'ticker', 'headline', 'source', 'published_at', 'sentiment_score']
+        fields = [
+            'id', 'ticker', 'headline', 'source', 'published_at',
+            'sentiment_score', 'sentiment_label', 'sentiment_strength', 'sentiment_color'
+        ]
+
+    def get_sentiment_label(self, obj):
+        score = obj.sentiment_score
+        if score is None:
+            return 'UNKNOWN'
+        if score > 0.1:
+            return 'POSITIVE'
+        if score < -0.1:
+            return 'NEGATIVE'
+        return 'NEUTRAL'
+
+    def get_sentiment_strength(self, obj):
+        score = obj.sentiment_score
+        if score is None:
+            return None
+        abs_score = abs(score)
+        if abs_score > 0.5:
+            return 'STRONG'
+        if abs_score > 0.2:
+            return 'MODERATE'
+        return 'WEAK'
+
+    def get_sentiment_color(self, obj):
+        score = obj.sentiment_score
+        if score is None:
+            return 'grey'
+        if score > 0.1:
+            return 'green'
+        if score < -0.1:
+            return 'red'
+        return 'yellow'
 
 
 class BacktestResultSerializer(serializers.ModelSerializer):
