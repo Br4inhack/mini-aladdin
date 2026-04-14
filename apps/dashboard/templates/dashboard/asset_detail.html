@@ -1,0 +1,146 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Asset Tear Sheet: {{ ticker }} — CRPMS{% endblock %}
+{% block page_title %}{{ ticker }} Tear Sheet{% endblock %}
+{% block page_subtitle %}Deep dive structural and technical analysis{% endblock %}
+
+{% block content %}
+<div class="dashboard-row">
+  <div class="dashboard-col-wide" style="flex:2.5;">
+    <div class="section" style="height: 100%;">
+      <div class="section-hdr">
+        <div>
+          <h2 id="asset-company">Loading Asset...</h2>
+          <small class="text-muted" id="asset-sector">90-Day Performance History</small>
+        </div>
+      </div>
+      <div class="chart-container" style="height:400px;">
+        <canvas id="asset-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-col" style="flex:1;">
+    <div class="section">
+      <div class="section-hdr">
+        <h2>AI Telemetry</h2>
+      </div>
+      <div style="padding: 24px;">
+        <div style="margin-bottom:16px;">
+          <div class="text-sm text-muted">Market Risk</div>
+          <div id="ai-risk" class="card-value" style="font-size:18px;">—</div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <div class="text-sm text-muted">Sentiment</div>
+          <div id="ai-sent" class="card-value" style="font-size:18px;">—</div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <div class="text-sm text-muted">Fundamental Health</div>
+          <div id="ai-fund" class="card-value" style="font-size:18px;">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-hdr">
+        <h2>Recent News</h2>
+      </div>
+      <ul class="alert-list" id="asset-news">
+        <li style="padding:20px; text-align:center;" class="text-muted text-sm">Loading...</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TICKER = "{{ ticker }}";
+const inr = (n) => new Intl.NumberFormat('en-IN', { style:'currency', currency:'INR' }).format(Number(n));
+
+async function loadAssetDetail() {
+  try {
+    const data = await fetch(`/api/asset/${TICKER}/history/`).then(r=>{
+      if(!r.ok) throw new Error("Asset not found");
+      return r.json();
+    });
+
+    document.getElementById('asset-company').textContent = `${data.ticker} – ${data.company_name}`;
+    document.getElementById('asset-sector').textContent = `${data.sector} | ${data.exchange}`;
+
+    // Fill AI Telemetry
+    const badgeMap = window.CRPMS.riskBadge;
+    const r = data.ai_analysis;
+    document.getElementById('ai-risk').innerHTML = `<span class="${badgeMap[r.market_risk] || badgeMap.UNKNOWN}">${r.market_risk}</span>`;
+    document.getElementById('ai-sent').innerHTML = `<span class="${badgeMap[r.sentiment] || badgeMap.UNKNOWN}">${r.sentiment}</span>`;
+    document.getElementById('ai-fund').innerHTML = `<span class="${badgeMap[r.fundamental] || badgeMap.UNKNOWN}">${r.fundamental}</span>`;
+
+    // Fill News
+    const newsHtml = data.recent_news.map(n => `
+      <li class="alert-row">
+        <div class="alert-body">
+          <p class="alert-msg" style="margin-bottom:4px;">${n.headline}</p>
+          <div class="alert-meta" style="justify-content:space-between;">
+             <span>Emotion Map: ${n.sentiment > 0.5 ? '🟩 Positive' : n.sentiment < -0.5 ? '🟥 Negative' : '🟨 Neutral'}</span>
+          </div>
+        </div>
+      </li>
+    `).join('');
+    document.getElementById('asset-news').innerHTML = newsHtml || '<li class="alert-row text-muted text-sm">No recent catalyst events.</li>';
+
+    // Build Chart.js line
+    const ctx = document.getElementById('asset-chart');
+    if(!ctx) return;
+    
+    // Sort chronological: older to newer
+    const sortedPx = [...data.prices].sort((a,b) => new Date(a.date) - new Date(b.date));
+    const labels = sortedPx.map(p => p.date);
+    const closeVals = sortedPx.map(p => parseFloat(p.close));
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Closing Price (₹)',
+          data: closeVals,
+          borderColor: '#8b5cf6',
+          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 6,
+          fill: true,
+          tension: 0.1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: { 
+            type: 'time', 
+            time: { unit: 'day', displayFormats: { day: 'dd MMM' } },
+            grid: { display: false, drawBorder: false }
+          },
+          y: { 
+            grid: { color: 'rgba(148, 163, 184, 0.1)' }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: { label: (ctx) => ` ${inr(ctx.parsed.y)}` }
+          }
+        }
+      }
+    });
+
+  } catch(e) {
+    document.getElementById('asset-chart').parentElement.innerHTML = `<div class="error-msg">Failed to load asset data. Ensure ticker exists.</div>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadAssetDetail);
+</script>
+{% endblock %}

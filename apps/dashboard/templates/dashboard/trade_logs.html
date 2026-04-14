@@ -1,0 +1,82 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Execution Ledger — CRPMS{% endblock %}
+{% block page_title %}Trade Logs & Execution Ledger{% endblock %}
+{% block page_subtitle %}Historical AI agent decisions and rationales for Portfolio #{{ portfolio_id }}{% endblock %}
+
+{% block content %}
+<div class="section">
+  <div class="section-hdr">
+    <div>
+      <h2>Decision Engine Ledger</h2>
+      <small class="text-muted" id="ledger-meta">Fetching historical logs...</small>
+    </div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr style="border-top: 1px solid var(--border-light);">
+          <th>Date Time</th>
+          <th>Ticker</th>
+          <th class="c">AI Action</th>
+          <th class="r">Confidence</th>
+          <th>Agent Reasoning</th>
+        </tr>
+      </thead>
+      <tbody id="ledger-tbody">
+        {% for i in "12345" %}
+        <tr>
+          <td><div class="skeleton" style="height:14px;width:120px;"></div></td>
+          <td><div class="skeleton" style="height:14px;width:60px;"></div></td>
+          <td class="c"><div class="skeleton" style="height:20px;width:60px;margin:auto;border-radius:99px;"></div></td>
+          <td class="r"><div class="skeleton" style="height:14px;width:40px;margin-left:auto;"></div></td>
+          <td><div class="skeleton" style="height:14px;width:80%;"></div></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PID = {{ portfolio_id }};
+const DT = luxon.DateTime;
+const tsStr = (iso) => iso ? DT.fromISO(iso).setZone('Asia/Kolkata').toFormat('dd MMM yy HH:mm') : '—';
+
+async function loadLedger() {
+  try {
+    const rawData = await fetch(`/api/portfolio/${PID}/trade-logs/`).then(r=>r.json());
+    document.getElementById('ledger-meta').textContent = `${rawData.length} execution records loaded`;
+    
+    const tbody = document.getElementById('ledger-tbody');
+    if(!rawData.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No execution logs found for this portfolio. The Decision Engine may not have run yet.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rawData.map(log => {
+      const action = log.action;
+      const ab = window.CRPMS.actionBadge[action] || window.CRPMS.actionBadge.HOLD;
+      const pct = (log.confidence_score * 100).toFixed(1) + '%';
+      
+      return `
+        <tr class="clickable" onclick="location.href='/dashboard/asset/${log.ticker.ticker}/'">
+          <td class="text-muted text-sm" style="white-space:nowrap;">${tsStr(log.timestamp)}</td>
+          <td><strong>${log.ticker.ticker.split('.')[0]}</strong></td>
+          <td class="c"><span class="${ab}">${action}</span></td>
+          <td class="r text-sm ${log.confidence_score > 0.8 ? 'green':''}">${pct}</td>
+          <td class="text-sm" style="max-width:400px; white-space:normal; line-height:1.5;">${log.reasoning_text || 'Automated rule evaluation matched.'}</td>
+        </tr>
+      `;
+    }).join('');
+
+  } catch(e) {
+    document.getElementById('ledger-tbody').innerHTML = `<tr><td colspan="5" class="error-msg">Failed to load execution ledger: ${e.message}</td></tr>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadLedger);
+</script>
+{% endblock %}

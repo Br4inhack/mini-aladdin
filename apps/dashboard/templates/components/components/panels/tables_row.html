@@ -1,0 +1,68 @@
+<!-- components/panels/tables_row.html -->
+<div class="css-grid grid-cols-2">
+  
+  <!-- Holdings Table -->
+  <div class="card">
+    <div class="section-title">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      Current Holdings
+    </div>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th class="r">Value</th>
+            <th class="r">PnL</th>
+            <th class="c">AI Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr x-show="loading"><td colspan="4"><div class="skeleton" style="height:32px;"></div></td></tr>
+          <template x-for="p in positions" :key="p.ticker">
+            <tr class="clickable" @click="window.location.href='/dashboard/asset/'+p.ticker+'/'" style="cursor:pointer;">
+              <td>
+                <div style="font-weight:600; color:var(--text-main);" x-text="p.ticker"></div>
+                <div class="text-sm text-muted" x-text="p.company_name"></div>
+              </td>
+              <td class="r mono" x-text="window.CRPMS.inr(p.current_price * p.quantity)"></td>
+              <td class="r mono" :class="p.unrealised_pnl_pct >= 0 ? 'text-green' : 'text-red'" x-text="window.CRPMS.pct(p.unrealised_pnl_pct)"></td>
+              <td class="c">
+                 <div class="badge" :style="`border: 1px solid ${window.CRPMS.riskConfig[p.risk_band]?.border || window.CRPMS.riskConfig.UNKNOWN.border}; color: ${window.CRPMS.riskConfig[p.risk_band]?.text}`" x-text="p.risk_band"></div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Opportunity Scanner -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <div class="section-title" style="margin:0;">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+        Master Scanner Opportunities
+      </div>
+      <a href="/dashboard/watchlist/" class="text-blue text-sm" style="font-weight:600;">View All &rarr;</a>
+    </div>
+    
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <div x-show="loading" class="skeleton" style="height:60px;width:100%;"></div>
+      <template x-for="opp in opportunities.slice(0, 4)" :key="opp.ticker">
+        <div class="interactive" style="display:flex; align-items:center; justify-content:space-between; padding:16px; background:var(--bg-body); border-radius:12px; border:1px solid var(--border-light); transition:transform 0.2s;">
+          <div>
+            <strong style="color:var(--text-main); font-size:15px;" x-text="opp.ticker"></strong>
+            <div class="text-muted text-sm" x-text="opp.company_name"></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px;">
+             <div class="badge" :style="`border: 1px solid ${window.CRPMS.riskConfig[opp.risk_band]?.border || window.CRPMS.riskConfig.UNKNOWN.border}; color: ${window.CRPMS.riskConfig[opp.risk_band]?.text}`" x-text="opp.risk_band"></div>
+             <button class="btn-action text-blue bg-blue-sm" style="border-color:var(--accent-blue); padding:6px 12px; font-size:12px;" onclick="alert('Re-allocating capital...')">Reallocate</button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+  </div>
+
+</div>

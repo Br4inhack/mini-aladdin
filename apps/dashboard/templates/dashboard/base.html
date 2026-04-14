@@ -1,0 +1,308 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}CRPMS — Institutional Intelligence{% endblock %}</title>
+
+  <!-- Google Fonts: Inter for UI, JetBrains Mono for financial data -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <script src="{% static 'vendor/luxon.min.js' %}"></script>
+  <script src="{% static 'vendor/chart.umd.min.js' %}"></script>
+  <script src="{% static 'vendor/chartjs-adapter-luxon.umd.min.js' %}"></script>
+  <script defer src="{% static 'vendor/alpine.min.js' %}"></script>
+
+  <style>
+    /* ── Institutional Dark Theme CSS Variables ──────────────────────────── */
+    :root {
+      /* Base Colors */
+      --bg-body: #0a0f1c;        /* Deep space black/blue */
+      --bg-surface: rgba(17, 24, 39, 0.7); /* Translucent gray-900 */
+      --bg-surface-hover: rgba(31, 41, 55, 0.8);
+      --bg-sidebar: #06090f;
+      
+      /* Borders & Dividers */
+      --border-light: rgba(55, 65, 81, 0.5); /* gray-700 translucent */
+      --border-glow: rgba(59, 130, 246, 0.3); /* blue glow */
+
+      /* Typography */
+      --text-main: #f3f4f6;      /* gray-100 */
+      --text-body: #9ca3af;      /* gray-400 */
+      --text-muted: #6b7280;     /* gray-500 */
+
+      /* Semantic Accents */
+      --accent-blue: #3b82f6;
+      --accent-blue-bg: rgba(59, 130, 246, 0.1);
+      --accent-green: #10b981;
+      --accent-green-bg: rgba(16, 185, 129, 0.1);
+      --accent-red: #ef4444;
+      --accent-red-bg: rgba(239, 68, 68, 0.1);
+      --accent-yellow: #f59e0b;
+      --accent-yellow-bg: rgba(245, 158, 11, 0.1);
+
+      /* Glows */
+      --shadow-surface: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+      --shadow-glow-blue: 0 0 15px rgba(59, 130, 246, 0.15);
+      --shadow-glow-green: 0 0 15px rgba(16, 185, 129, 0.1);
+      --shadow-glow-red: 0 0 15px rgba(239, 68, 68, 0.1);
+    }
+
+    /* ── Reset ───────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      font-family: 'Inter', -apple-system, sans-serif;
+      font-size: 14px;
+      color: var(--text-body);
+      background: var(--bg-body);
+      /* Background pattern */
+      background-image: radial-gradient(circle at top center, rgba(31, 41, 55, 0.3) 0%, transparent 40%);
+      background-attachment: fixed;
+    }
+    a { text-decoration: none; color: inherit; }
+    button { cursor: pointer; border: none; background: none; font: inherit; outline: none; }
+    table { border-collapse: collapse; width: 100%; }
+
+    /* For Financial Data Mono-spacing */
+    .mono { font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; }
+
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    .app-shell   { display: flex; height: 100vh; overflow: hidden; }
+    .sidebar     { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--bg-sidebar); border-right: 1px solid var(--border-light); overflow-y: auto; z-index: 10; }
+    .main        { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+    .topbar      { background: rgba(10, 15, 28, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-light); padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; z-index: 5; }
+    .page-body   { flex: 1; overflow-y: auto; padding: 32px; }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────── */
+    .sidebar-logo { padding: 24px 24px 20px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 14px; }
+    .sidebar-logo .logo-icon { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #2563eb, #10b981); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: var(--shadow-glow-blue); }
+    .sidebar-logo .logo-text { font-size: 19px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+    .sidebar-logo .logo-sub  { font-size: 11px; color: var(--accent-blue); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+    
+    .sidebar-nav { padding: 20px 16px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .nav-label   { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin: 12px 0 8px 12px; }
+    .nav-link    { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--text-body); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+    .nav-link:hover { background: var(--bg-surface-hover); color: var(--text-main); transform: translateX(4px); }
+    .nav-link.active { background: var(--accent-blue-bg); color: var(--accent-blue); border-left: 3px solid var(--accent-blue); padding-left: 11px; }
+    .nav-link svg { width: 18px; height: 18px; flex-shrink: 0; }
+    
+    .sidebar-footer { padding: 20px; border-top: 1px solid var(--border-light); }
+    .status-dot { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-surface); border: 1px solid var(--border-light); border-radius: 10px; font-size: 12px; color: var(--text-body); font-weight: 500; }
+    .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; box-shadow: 0 0 12px var(--accent-green); } 50% { opacity:.4; box-shadow: none; } }
+
+    /* ── Topbar ──────────────────────────────────────────────────────────── */
+    .topbar h1   { font-size: 20px; font-weight: 600; color: var(--text-main); letter-spacing: -0.5px; }
+    .topbar p    { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+    .topbar-right { display: flex; align-items: center; gap: 16px; }
+    .ist-clock   { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500; color: var(--accent-blue); background: var(--accent-blue-bg); border: 1px solid rgba(59, 130, 246, 0.2); padding: 8px 14px; border-radius: 8px; }
+    .btn-action  { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-main); background: var(--bg-surface); border: 1px solid var(--border-light); transition: all 0.2s; }
+    .btn-action:hover { background: var(--bg-surface-hover); border-color: var(--text-muted); box-shadow: var(--shadow-surface); }
+
+    /* ── Reusable Component Atoms ────────────────────────────────────────── */
+    
+    /* Modern Glass Cards */
+    .card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-light);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: var(--shadow-surface);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+    .card.interactive:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255,255,255,0.1);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+    }
+    
+    /* Glow pseudo-element for cards */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--border-glow), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .card:hover::before { opacity: 1; }
+
+    /* Grid System */
+    .css-grid { display: grid; gap: 24px; margin-bottom: 24px; }
+    .grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-cols-layout { grid-template-columns: 2fr 1.2fr; }
+
+    /* Headings */
+    .section-title { font-size: 16px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .section-title svg { color: var(--accent-blue); width: 18px; }
+
+    /* Tables (Fintech Standard) */
+    .table-container { overflow-x: auto; margin: -24px; margin-top: 0;}
+    table { width: 100%; text-align: left; }
+    th { padding: 12px 24px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 1px solid var(--border-light); white-space: nowrap; }
+    td { padding: 16px 24px; font-size: 13px; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.03); }
+    tr { transition: background 0.15s; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    tr:last-child td { border-bottom: none; }
+    .r { text-align: right; } .c { text-align: center; }
+
+    /* Utilities */
+    .text-green { color: var(--accent-green); }
+    .text-red { color: var(--accent-red); }
+    .text-blue { color: var(--accent-blue); }
+    .bg-green-sm { background: var(--accent-green-bg); color: var(--accent-green); border: 1px solid rgba(16,185,129,0.2); }
+    .bg-red-sm { background: var(--accent-red-bg); color: var(--accent-red); border: 1px solid rgba(239,68,68,0.2); }
+    .bg-yellow-sm { background: var(--accent-yellow-bg); color: var(--accent-yellow); border: 1px solid rgba(245,158,11,0.2); }
+    
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; letter-spacing: 0.5px; }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+    /* Progress Bars */
+    .progress-track { width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+    .progress-fill { height: 100%; border-radius: 99px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-body); }
+    ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* Alpine Cloak - Prevents flicker while initializing */
+    [x-cloak] { display: none !important; }
+
+    /* Skeleton Loading */
+    .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%); background-size: 200%; animation: shimmer 1.5s infinite; border-radius: 6px; color: transparent !important; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  </style>
+</head>
+
+<body>
+<div class="app-shell">
+
+  <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">
+        <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+      </div>
+      <div>
+        <div class="logo-text">CRPMS</div>
+        <div class="logo-sub">Intelligent Portfolios</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-label">Core</div>
+      <a href="/dashboard/" class="nav-link {% if request.path == '/dashboard/' %}active{% endif %}">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        Command Center
+      </a>
+      <a href="/dashboard/portfolio/1/" class="nav-link {% if 'portfolio' in request.path %}active{% endif %}">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Assets & Positions
+      </a>
+      <div class="nav-label">Intelligence</div>
+      <a href="/dashboard/watchlist/" class="nav-link {% if 'watchlist' in request.path %}active{% endif %}">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+        Opportunities
+      </a>
+      <a href="/dashboard/decisions/" class="nav-link {% if 'decisions' in request.path %}active{% endif %}">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+        Execution Ledger
+      </a>
+      <div class="nav-label">Simulations</div>
+      <a href="/dashboard/backtest/" class="nav-link {% if 'backtest' in request.path %}active{% endif %}">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Backtester
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-dot">
+        <span class="pulse"></span>
+        Engines Online
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ─────────────────────────────────────────────────────────── -->
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1>{% block page_title %}Command Center{% endblock %}</h1>
+        <p>{% block page_subtitle %}Real-time algorithmic supervision{% endblock %}</p>
+      </div>
+      <div class="topbar-right">
+        
+        <button onclick="window.location.href='/api/portfolio/1/export/positions/csv/'" class="btn-action" title="Export Ledger as CSV">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Export CSV
+        </button>
+        
+        <div class="ist-clock" id="ist-clock">--:--:-- IST</div>
+      </div>
+    </header>
+
+    <main class="page-body">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+</div>
+
+<!-- Global Helpers -->
+<script>
+// IST clock
+(function tick() {
+  const el = document.getElementById('ist-clock');
+  if (el) el.textContent = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false
+  }).format(new Date()) + ' IST';
+  setTimeout(tick, 1000);
+})();
+
+// Global formatting utils accessible to Alpine
+window.CRPMS = {
+  inr: (n) => new Intl.NumberFormat('en-IN', { style:'currency', currency:'INR', maximumFractionDigits:2 }).format(Number(n)),
+  pct: (n) => `${Number(n)>=0?'+':''}${Number(n).toFixed(2)}%`,
+  
+  // Fintech badge mappings
+  riskConfig: {
+    LOW:      { border: 'rgba(16,185,129,0.3)', bg: 'rgba(16,185,129,0.1)', text: '#10b981', pulse: '#10b981' },
+    MEDIUM:   { border: 'rgba(245,158,11,0.3)', bg: 'rgba(245,158,11,0.1)', text: '#f59e0b', pulse: '#f59e0b' },
+    HIGH:     { border: 'rgba(239,68,68,0.3)',  bg: 'rgba(239,68,68,0.1)',  text: '#ef4444', pulse: '#ef4444' },
+    CRITICAL: { border: 'rgba(220,38,38,0.5)',  bg: 'rgba(220,38,38,0.2)',  text: '#f87171', pulse: '#f87171' },
+    UNKNOWN:  { border: 'rgba(107,114,128,0.3)',bg: 'rgba(107,114,128,0.1)',text: '#9ca3af', pulse: '#9ca3af' }
+  },
+  
+  actionConfig: {
+    HOLD:       { border: 'rgba(107,114,128,0.3)', bg: 'rgba(107,114,128,0.1)', text: '#9ca3af' },
+    REDUCE:     { border: 'rgba(245,158,11,0.3)',  bg: 'rgba(245,158,11,0.1)',  text: '#f59e0b' },
+    EXIT:       { border: 'rgba(239,68,68,0.3)',   bg: 'rgba(239,68,68,0.1)',   text: '#ef4444' },
+    INCREASE:   { border: 'rgba(16,185,129,0.3)',  bg: 'rgba(16,185,129,0.1)',  text: '#10b981' },
+    REALLOCATE: { border: 'rgba(59,130,246,0.3)',  bg: 'rgba(59,130,246,0.1)',  text: '#3b82f6' }
+  }
+};
+
+// Override Chart.js global defaults for Dark Mode Fintech integration
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.color = '#9ca3af'; // gray-400
+  Chart.defaults.borderColor = 'rgba(55, 65, 81, 0.5)'; // border-light
+  Chart.defaults.font.family = 'Inter';
+}
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

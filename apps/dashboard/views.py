@@ -1,19 +1,47 @@
 """
-Skeletons View controllers for the Frontend Dashboard.
+Dashboard view controllers for CRPMS.
+Simple template renderers — all data is fetched by JavaScript from the REST API.
 """
-from django.views.generic import TemplateView
-from django.contrib.auth.mixins import LoginRequiredMixin
+
+from django.shortcuts import render, redirect
+from django.views import View
 
 
-class DashboardHomeView(LoginRequiredMixin, TemplateView):
-    """
-    Main entry point for the frontend dashboard application.
-    Requires user authentication, redirecting to the admin login if missing.
-    """
-    template_name = 'dashboard/index.html'
-    login_url = '/admin/login/'
-    
-    # TODO: Person 5 implements full context data and logic here
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        return context
+class IndexRedirectView(View):
+    def get(self, request):
+        return redirect('/dashboard/')
+
+
+class DashboardIndexView(View):
+    def get(self, request):
+        return render(request, 'dashboard/index.html', {'portfolio_id': 1})
+
+
+class PortfolioDetailView(View):
+    def get(self, request, portfolio_id):
+        return render(request, 'dashboard/portfolio.html', {'portfolio_id': portfolio_id})
+
+
+class WatchlistView(View):
+    def get(self, request):
+        return render(request, 'dashboard/watchlist.html', {'portfolio_id': 1})
+
+
+class AssetDetailView(View):
+    def get(self, request, ticker):
+        return render(request, 'dashboard/asset_detail.html', {'portfolio_id': 1, 'ticker': ticker})
+
+
+class TradeLogView(View):
+    def get(self, request):
+        return render(request, 'dashboard/trade_logs.html', {'portfolio_id': 1})
+
+
+class BacktestView(View):
+    def get(self, request):
+        return render(request, 'dashboard/backtest.html', {'portfolio_id': 1})
+
+
+class AlertHistoryView(View):
+    def get(self, request):
+        return render(request, 'dashboard/alerts.html', {'portfolio_id': 1})

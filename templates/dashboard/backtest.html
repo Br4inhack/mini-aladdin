@@ -1,0 +1,104 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}CRPMS — Backtest{% endblock %}
+{% block page_title %}Backtest Runner{% endblock %}
+{% block page_subtitle %}Risk-Aware Phase 1 Strategy · Historical Simulation{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Run form -->
+  <div class="bg-white rounded-xl border border-gray-200 p-6 max-w-lg">
+    <h2 class="font-semibold text-gray-800 mb-4">Run New Backtest</h2>
+    <form id="backtest-form" class="space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1" for="start_date">Start Date</label>
+          <input id="start_date" type="date" value="2024-01-01"
+                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1" for="end_date">End Date</label>
+          <input id="end_date" type="date" value="2024-12-31"
+                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+      <button type="submit"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2.5 px-4 rounded-lg transition-colors">
+        Run Backtest
+      </button>
+    </form>
+    <div id="run-status" class="mt-4 text-sm"></div>
+  </div>
+
+  <!-- Results table -->
+  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="font-semibold text-gray-800">Backtest Results</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+          <tr>
+            <th class="px-6 py-3 text-left">Strategy</th>
+            <th class="px-6 py-3 text-left">Period</th>
+            <th class="px-6 py-3 text-right">CAGR %</th>
+            <th class="px-6 py-3 text-right">Sharpe</th>
+            <th class="px-6 py-3 text-right">Max DD %</th>
+            <th class="px-6 py-3 text-right">Benchmark %</th>
+          </tr>
+        </thead>
+        <tbody id="results-tbody">
+          <tr><td colspan="6" class="px-6 py-8 text-center text-gray-400">Loading results…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PID = {{ portfolio_id }};
+
+async function loadResults() {
+  const r = await fetch(`/api/portfolio/${PID}/backtest-results/`);
+  const results = await r.json();
+  const tbody = document.getElementById('results-tbody');
+  if (!results.length) { tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-400">No backtests run yet</td></tr>'; return; }
+  tbody.innerHTML = results.map(b => `
+    <tr class="hover:bg-gray-50">
+      <td class="px-6 py-3 font-medium text-gray-900">${b.run_name}</td>
+      <td class="px-6 py-3 text-gray-500">${b.start_date} → ${b.end_date}</td>
+      <td class="px-6 py-3 text-right font-medium ${b.cagr >= 0 ? 'text-green-600' : 'text-red-600'}">${Number(b.cagr).toFixed(2)}%</td>
+      <td class="px-6 py-3 text-right text-gray-600">${Number(b.sharpe_ratio).toFixed(3)}</td>
+      <td class="px-6 py-3 text-right text-red-500">${Number(b.max_drawdown).toFixed(2)}%</td>
+      <td class="px-6 py-3 text-right text-gray-600">${b.benchmark_results?.benchmark_return?.toFixed(2) ?? '—'}%</td>
+    </tr>`).join('');
+}
+
+document.getElementById('backtest-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const status = document.getElementById('run-status');
+  status.textContent = 'Queuing backtest…';
+  try {
+    const r = await fetch(`/api/portfolio/${PID}/run-backtest/`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+      body: JSON.stringify({
+        start_date: document.getElementById('start_date').value,
+        end_date: document.getElementById('end_date').value,
+      })
+    });
+    const d = await r.json();
+    status.innerHTML = `<span class="text-green-600">✓ ${d.message || d.status}</span>`;
+    setTimeout(loadResults, 2000);
+  } catch(err) {
+    status.innerHTML = `<span class="text-red-600">Error: ${err.message}</span>`;
+  }
+});
+
+loadResults();
+</script>
+{% endblock %}

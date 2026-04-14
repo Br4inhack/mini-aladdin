@@ -309,6 +309,11 @@ if platform.system() == 'Windows':
     # This env var signals that we are in a Windows multiprocessing context
     os.environ.setdefault('FORKED_BY_MULTIPROCESSING', '1')
 
+# ─── Static Files ─────────────────────────────────────────────────────────────
+
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [BASE_DIR / 'static']
+
 # ─── Celery Beat Schedule ─────────────────────────────────────────────────────
 
 from config.celery_schedule import *

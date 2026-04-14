@@ -1,0 +1,56 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}CRPMS — Alerts{% endblock %}
+{% block page_title %}Alert History{% endblock %}
+{% block page_subtitle %}System-generated risk, sentiment & data-quality alerts{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h2 class="font-semibold text-gray-800">Active Alerts</h2>
+    <span class="text-xs text-gray-400" id="alert-count">Loading…</span>
+  </div>
+  <ul id="alerts-list" class="divide-y divide-gray-100">
+    <li class="px-6 py-6 text-sm text-gray-400 text-center">Loading alerts…</li>
+  </ul>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PID = {{ portfolio_id }};
+
+async function loadAlerts() {
+  const r = await fetch(`/api/portfolio/${PID}/alerts/`);
+  const alerts = await r.json();
+  document.getElementById('alert-count').textContent = `${alerts.length} unacknowledged`;
+  const list = document.getElementById('alerts-list');
+  if (!alerts.length) { list.innerHTML = '<li class="px-6 py-6 text-sm text-gray-400 text-center">No active alerts 🎉</li>'; return; }
+  list.innerHTML = alerts.map(a => `
+    <li class="px-6 py-4 flex items-start gap-4" id="alert-${a.id}">
+      <div class="flex-1">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-2 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700">${a.alert_type}</span>
+          ${a.ticker ? `<span class="text-xs font-mono text-blue-600">${a.ticker.ticker}</span>` : ''}
+          <span class="text-xs text-gray-400 ml-auto">${a.created_at ? new Date(a.created_at).toLocaleString('en-IN') : ''}</span>
+        </div>
+        <p class="text-sm text-gray-700">${a.message}</p>
+      </div>
+      <button onclick="acknowledge(${a.id})"
+              class="flex-shrink-0 text-xs bg-gray-100 hover:bg-green-100 hover:text-green-700 text-gray-500 px-3 py-1.5 rounded-lg transition-colors">
+        Dismiss
+      </button>
+    </li>`).join('');
+}
+
+async function acknowledge(alertId) {
+  await fetch(`/api/portfolio/${PID}/alerts/${alertId}/acknowledge/`, {
+    method: 'POST',
+    headers: {'X-CSRFToken': '{{ csrf_token }}'}
+  });
+  document.getElementById(`alert-${alertId}`)?.remove();
+}
+
+loadAlerts();
+</script>
+{% endblock %}
