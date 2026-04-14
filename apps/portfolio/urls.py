@@ -12,12 +12,14 @@ urlpatterns = [
     path('portfolio/<int:portfolio_id>/decisions/', api_views.DecisionView.as_view(), name='api-decisions'),
     path('portfolio/<int:portfolio_id>/state-snapshot/', api_views.StateSnapshotView.as_view(), name='api-state-snapshot'),
     path('portfolio/<int:portfolio_id>/equity-curve/', api_views.PortfolioEquityCurveView.as_view(), name='api-equity-curve'),
-    
     path('portfolio/<int:portfolio_id>/alerts/', api_views.AlertListView.as_view(), name='api-alerts'),
+    path('portfolio/<int:portfolio_id>/alerts/history/', api_views.AlertHistoryView.as_view(), name='api-alerts-history'),
+    path('portfolio/<int:portfolio_id>/alerts/stats/', api_views.AlertStatsView.as_view(), name='api-alerts-stats'),
     path('portfolio/<int:portfolio_id>/alerts/<int:alert_id>/acknowledge/', api_views.AlertAcknowledgeView.as_view(), name='api-alerts-acknowledge'),
     path('portfolio/<int:portfolio_id>/price-history/<str:ticker_symbol>/', api_views.PriceHistoryView.as_view(), name='api-price-history'),
     path('portfolio/<int:portfolio_id>/news/<str:ticker_symbol>/', api_views.NewsArticleView.as_view(), name='api-news'),
     path('portfolio/<int:portfolio_id>/backtest-results/', api_views.BacktestResultListView.as_view(), name='api-backtest-list'),
+    path('portfolio/<int:portfolio_id>/backtest-results/<int:backtest_id>/', api_views.BacktestDetailView.as_view(), name='api-backtest-detail'),
     path('portfolio/<int:portfolio_id>/run-backtest/', api_views.RunBacktestView.as_view(), name='api-run-backtest'),
     path('portfolio/<int:portfolio_id>/trade-logs/', api_views.TradeLogAPIView.as_view(), name='api-trade-logs'),
     
@@ -30,5 +32,6 @@ urlpatterns = [
     path('portfolio/<int:portfolio_id>/sector-exposure/', api_views.SectorExposureView.as_view(), name='api-sector-exposure'),
     path('portfolio/<int:portfolio_id>/pnl-trend/', api_views.PnLTrendView.as_view(), name='api-pnl-trend'),
 
+        path('portfolio/<int:portfolio_id>/macro-indicators/', api_views.MacroIndicatorView.as_view(), name='api-macro-indicators'),
     path('health/', api_views.HealthCheckAPIView.as_view(), name='api-health'),
 ]

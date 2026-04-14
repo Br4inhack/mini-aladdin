@@ -1,0 +1,241 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+
+{% block title %}Settings — CRPMS{% endblock %}
+{% block page_title %}System Configuration{% endblock %}
+{% block page_subtitle %}Advanced flags, thresholds, and live status{% endblock %}
+
+{% block content %}
+<div class="css-grid" style="grid-template-columns: 1fr 1fr; gap: 24px;">
+
+  <!-- ── LEFT COLUMN ───────────────────────────────────────────────────── -->
+  <div style="display:flex; flex-direction:column; gap:24px;">
+
+    <!-- SECTION A: Feature Flags -->
+    <div class="card">
+      <div class="section-title">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Feature Flags
+      </div>
+      
+      <div class="table-container" style="margin-top: 16px;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 70%;">Feature Name</th>
+              <th class="r">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono text-main" style="font-size: 13px;">ML_RISK_AGENT</td>
+              <td class="r">
+                {% if FEATURES.ML_RISK_AGENT %}
+                  <span class="badge" style="background:rgba(16,185,129,0.1); color:var(--accent-green); border:1px solid rgba(16,185,129,0.2);">ENABLED</span>
+                {% else %}
+                  <span class="badge" style="background:rgba(107,114,128,0.1); color:var(--text-muted); border:1px solid rgba(107,114,128,0.3);">DISABLED</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 13px;">FINBERT_SENTIMENT</td>
+              <td class="r">
+                {% if FEATURES.FINBERT_SENTIMENT %}
+                  <span class="badge" style="background:rgba(16,185,129,0.1); color:var(--accent-green); border:1px solid rgba(16,185,129,0.2);">ENABLED</span>
+                {% else %}
+                  <span class="badge" style="background:rgba(107,114,128,0.1); color:var(--text-muted); border:1px solid rgba(107,114,128,0.3);">DISABLED</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 13px;">LIVE_WEBSOCKET</td>
+              <td class="r">
+                {% if FEATURES.LIVE_WEBSOCKET %}
+                  <span class="badge" style="background:rgba(16,185,129,0.1); color:var(--accent-green); border:1px solid rgba(16,185,129,0.2);">ENABLED</span>
+                {% else %}
+                  <span class="badge" style="background:rgba(107,114,128,0.1); color:var(--text-muted); border:1px solid rgba(107,114,128,0.3);">DISABLED</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 13px;">PAPER_TRADING</td>
+              <td class="r">
+                {% if FEATURES.PAPER_TRADING %}
+                  <span class="badge" style="background:rgba(16,185,129,0.1); color:var(--accent-green); border:1px solid rgba(16,185,129,0.2);">ENABLED</span>
+                {% else %}
+                  <span class="badge" style="background:rgba(107,114,128,0.1); color:var(--text-muted); border:1px solid rgba(107,114,128,0.3);">DISABLED</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 13px;">LLM_ENABLED</td>
+              <td class="r">
+                {% if FEATURES.LLM_ENABLED %}
+                  <span class="badge" style="background:rgba(16,185,129,0.1); color:var(--accent-green); border:1px solid rgba(16,185,129,0.2);">ENABLED</span>
+                {% else %}
+                  <span class="badge" style="background:rgba(107,114,128,0.1); color:var(--text-muted); border:1px solid rgba(107,114,128,0.3);">DISABLED</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 13px;">CHANNELS_ENABLED</td>
+              <td class="r">
+                {% if FEATURES.CHANNELS_ENABLED %}
+                  <span class="badge" style="background:rgba(16,185,129,0.1); color:var(--accent-green); border:1px solid rgba(16,185,129,0.2);">ENABLED</span>
+                {% else %}
+                  <span class="badge" style="background:rgba(107,114,128,0.1); color:var(--text-muted); border:1px solid rgba(107,114,128,0.3);">DISABLED</span>
+                {% endif %}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="text-muted text-sm" style="margin-top: 20px; font-style: italic;">
+        To change feature flags, update config/settings.py and restart Django.
+      </div>
+    </div>
+
+    <!-- SECTION C: System Status -->
+    <div class="card" x-data="systemStatus()" x-init="initStatus()">
+      <div class="section-title">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        Live System Status
+      </div>
+
+      <div x-show="loading" class="skeleton" style="height: 150px; border-radius: 8px; margin-top: 16px;"></div>
+
+      <div x-show="!loading" style="display:flex; flex-direction:column; gap:16px; margin-top: 16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:var(--bg-body); border-radius:8px; border:1px solid var(--border-light);">
+          <span class="text-sm text-muted">Last State Update</span>
+          <span class="mono font-bold" x-text="lastUpdate"></span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:var(--bg-body); border-radius:8px; border:1px solid var(--border-light);">
+          <span class="text-sm text-muted">Active Alerts (Unacknowledged)</span>
+          <span class="mono font-bold text-yellow" x-text="stats.unacknowledged"></span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:var(--bg-body); border-radius:8px; border:1px solid var(--border-light);">
+          <span class="text-sm text-muted">30-Day Alert Count</span>
+          <span class="mono font-bold text-main" x-text="stats.total_alerts"></span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:var(--bg-body); border-radius:8px; border:1px solid var(--border-light);">
+          <span class="text-sm text-muted">Alert Acknowledge Rate</span>
+          <span class="mono font-bold text-blue" x-text="(stats.acknowledged_rate * 100).toFixed(0) + '%'"></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT COLUMN ──────────────────────────────────────────────────── -->
+  <div style="display:flex; flex-direction:column; gap:24px;">
+
+    <!-- SECTION B: System Thresholds -->
+    <div class="card">
+      <div class="section-title">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+        CRPMS Thresholds
+      </div>
+      
+      <div class="table-container" style="margin-top: 16px;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 35%;">Parameter</th>
+              <th class="c" style="width: 15%;">Value</th>
+              <th style="width: 50%;">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono text-main" style="font-size: 11px;">MAX_DRAWDOWN_THRESHOLD</td>
+              <td class="c mono font-bold">-{{ CRPMS.MAX_DRAWDOWN_THRESHOLD|default:5.0|floatformat:1 }}%</td>
+              <td class="text-sm text-muted" style="line-height: 1.4;">Portfolio drawdown % that activates Drawdown Guard</td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 11px;">DRAWDOWN_RECOVERY_THRESHOLD</td>
+              <td class="c mono font-bold">+{{ CRPMS.DRAWDOWN_RECOVERY_THRESHOLD|default:2.0|floatformat:1 }}%</td>
+              <td class="text-sm text-muted" style="line-height: 1.4;">Recovery % required to deactivate Drawdown Guard</td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 11px;">MAX_POSITION_PCT</td>
+              <td class="c mono font-bold">{{ CRPMS.MAX_POSITION_PCT|default:15 }}%</td>
+              <td class="text-sm text-muted" style="line-height: 1.4;">Maximum % of capital in a single position (Mode 2)</td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 11px;">MIN_POSITION_PCT</td>
+              <td class="c mono font-bold">{{ CRPMS.MIN_POSITION_PCT|default:2 }}%</td>
+              <td class="text-sm text-muted" style="line-height: 1.4;">Minimum % of capital in a single position (Mode 2)</td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 11px;">RISK_SCORE_EXIT_THRESHOLD</td>
+              <td class="c mono font-bold text-red">{{ CRPMS.RISK_SCORE_EXIT_THRESHOLD|default:80 }}</td>
+              <td class="text-sm text-muted" style="line-height: 1.4;">Risk score above which EXIT is recommended</td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 11px;">RISK_SCORE_REDUCE_THRESHOLD</td>
+              <td class="c mono font-bold text-yellow">{{ CRPMS.RISK_SCORE_REDUCE_THRESHOLD|default:65 }}</td>
+              <td class="text-sm text-muted" style="line-height: 1.4;">Risk score above which REDUCE is recommended</td>
+            </tr>
+            <tr>
+              <td class="mono text-main" style="font-size: 11px;">SENTIMENT_WINDOW_HOURS</td>
+              <td class="c mono font-bold">{{ CRPMS.SENTIMENT_WINDOW_HOURS|default:72 }}h</td>
+              <td class="text-sm text-muted" style="line-height: 1.4;">Hours of news history used for sentiment average</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+  </div>
+</div>
+
+<style>
+  .font-bold { font-weight: 700; }
+  .text-main { color: var(--text-main); }
+  .text-yellow { color: var(--accent-yellow); }
+  .text-blue { color: var(--accent-blue); }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  /* Make table td vertical alignment consistent */
+  td { vertical-align: middle; }
+</style>
+
+<script>
+function systemStatus() {
+  return {
+    loading: true,
+    lastUpdate: '—',
+    stats: {
+      total_alerts: '—',
+      unacknowledged: '—',
+      acknowledged_rate: 0
+    },
+
+    async initStatus() {
+      try {
+        const [stateRes, statsRes] = await Promise.all([
+          fetch('/api/portfolio/1/state-snapshot/').then(r => r.json()),
+          fetch('/api/portfolio/1/alerts/stats/').then(r => r.json())
+        ]);
+        
+        if (stateRes && stateRes.length > 0) {
+          const dt = new Date(stateRes[0].timestamp);
+          this.lastUpdate = dt.toLocaleDateString('en-IN', {day:'2-digit', month:'short'}) + ' ' + 
+                            dt.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false});
+        } else {
+          this.lastUpdate = 'No Data';
+        }
+        
+        if (statsRes) {
+          this.stats = statsRes;
+        }
+        
+        this.loading = false;
+      } catch (e) {
+        console.error('Failed to load system status', e);
+        this.loading = false;
+      }
+    }
+  }
+}
+</script>
+{% endblock %}
