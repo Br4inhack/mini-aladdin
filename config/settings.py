@@ -173,6 +173,71 @@ CELERY_TIMEZONE = 'Asia/Kolkata'
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 CELERY_RESULT_EXTENDED = True
 
+# ─── Celery Beat Schedule (Person 2 — Data Ingestion) ─────────────────────────
+# Times are in Asia/Kolkata (IST). NSE trading hours: 09:15–15:30 IST.
+
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    # Daily OHLCV batch download — runs at 16:30 IST (after market close)
+    'daily-price-ingestion': {
+        'task': 'apps.data_ingestion.tasks.ingest_watchlist_price_history_batch',
+        'schedule': crontab(hour=16, minute=30),
+        'kwargs': {'days': 2, 'batch_size': 10},
+    },
+
+    # Daily NSE Bhavcopy — runs at 17:00 IST (after NSE publishes)
+    # The task will be called via trigger_todays_bhavcopy which computes today's date.
+    'daily-nse-bhavcopy': {
+        'task': 'apps.data_ingestion.tasks.ingest_todays_bhavcopy',
+        'schedule': crontab(hour=17, minute=0),
+    },
+
+    # Daily benchmark (NIFTY50 / SENSEX) — runs at 16:45 IST
+    'daily-benchmark-ingestion': {
+        'task': 'apps.data_ingestion.tasks.ingest_benchmark_history',
+        'schedule': crontab(hour=16, minute=45),
+        'kwargs': {'days': 2},
+    },
+
+    # Weekly fundamentals (PE, EPS, debt ratio) — every Sunday at 06:00 IST
+    'weekly-fundamentals-ingestion': {
+        'task': 'apps.data_ingestion.tasks.ingest_fundamentals_all',
+        'schedule': crontab(hour=6, minute=0, day_of_week=0),
+    },
+
+    # RBI macro indicators (repo rate, CPI India, INR/USD) — every Monday 07:00 IST
+    'weekly-rbi-macro-ingestion': {
+        'task': 'apps.data_ingestion.tasks.ingest_rbi_macro_data',
+        'schedule': crontab(hour=7, minute=0, day_of_week=1),
+        'kwargs': {'days': 365 * 3},
+    },
+
+    # FRED US macro indicators — every Monday 07:30 IST
+    'weekly-fred-gdp': {
+        'task': 'apps.data_ingestion.tasks.ingest_fred_macro_indicator',
+        'schedule': crontab(hour=7, minute=30, day_of_week=1),
+        'kwargs': {'indicator_name': 'US_GDP', 'fred_code': 'GDP', 'days': 365 * 3},
+    },
+    'weekly-fred-cpi': {
+        'task': 'apps.data_ingestion.tasks.ingest_fred_macro_indicator',
+        'schedule': crontab(hour=7, minute=35, day_of_week=1),
+        'kwargs': {'indicator_name': 'US_CPI', 'fred_code': 'CPIAUCSL', 'days': 365 * 3},
+    },
+    'weekly-fred-fedfunds': {
+        'task': 'apps.data_ingestion.tasks.ingest_fred_macro_indicator',
+        'schedule': crontab(hour=7, minute=40, day_of_week=1),
+        'kwargs': {'indicator_name': 'US_FED_FUNDS', 'fred_code': 'FEDFUNDS', 'days': 365 * 3},
+    },
+
+    # Data quality check — every weekday at 18:00 IST
+    'daily-data-quality-check': {
+        'task': 'apps.data_ingestion.tasks.run_data_quality_checks',
+        'schedule': crontab(hour=18, minute=0, day_of_week='1-5'),
+        'kwargs': {'expected_ticker_count': 73},
+    },
+}
+
 # Task routing
 CELERY_TASK_ROUTES = {
     'apps.data_ingestion.tasks.*': {'queue': 'data'},
