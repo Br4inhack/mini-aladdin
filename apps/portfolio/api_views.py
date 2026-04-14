@@ -333,6 +333,114 @@ class AssetHistoryView(APIView):
             return Response({'error': str(e)}, status=500)
 
 
+
+
+class SentimentTrendView(APIView):
+    """VIEW 15: Returns 7-day daily average sentiment for a ticker."""
+    permission_classes = []
+
+    def get(self, request, portfolio_id, ticker_symbol):
+        try:
+            from collections import defaultdict
+            watchlist = get_object_or_404(Watchlist, ticker=ticker_symbol)
+            cutoff = date.today() - timedelta(days=7)
+
+            articles = NewsArticle.objects.filter(
+                ticker_tag=watchlist,
+                published_at__date__gte=cutoff,
+                sentiment_score__isnull=False
+            ).order_by('published_at')
+
+            daily = defaultdict(list)
+            for a in articles:
+                day_str = a.published_at.date().isoformat()
+                daily[day_str].append(a.sentiment_score)
+
+            result = []
+            for i in range(7, 0, -1):
+                day = (date.today() - timedelta(days=i)).isoformat()
+                scores = daily.get(day, [])
+                result.append({
+                    'date': day,
+                    'avg_sentiment': round(sum(scores) / len(scores), 4) if scores else 0,
+                    'article_count': len(scores)
+                })
+
+            return Response(result)
+        except Exception as e:
+            from django.http import Http404
+            if isinstance(e, Http404):
+                return Response({'error': 'Not found'}, status=404)
+            return Response({'error': str(e)}, status=500)
+
+
+
+class SectorExposureView(APIView):
+    """VIEW 16: Returns current capital breakdown by sector for all positions."""
+    permission_classes = []
+
+    def get(self, request, portfolio_id):
+        try:
+            get_object_or_404(Portfolio, id=portfolio_id)
+            positions = Position.objects.filter(
+                portfolio_id=portfolio_id
+            ).select_related('watchlist')
+
+            sector_map = defaultdict(lambda: {'value': 0.0, 'count': 0})
+            total_value = 0.0
+
+            for pos in positions:
+                cur = float(pos.current_price or pos.avg_buy_price or 0)
+                val = cur * pos.quantity
+                sector = (pos.watchlist.sector or '').strip() or 'Other'
+                sector_map[sector]['value'] += val
+                sector_map[sector]['count'] += 1
+                total_value += val
+
+            result = []
+            for sector, data in sector_map.items():
+                result.append({
+                    'sector':         sector,
+                    'current_value':  round(data['value'], 2),
+                    'sector_pct':     round(data['value'] / total_value * 100, 2) if total_value else 0,
+                    'position_count': data['count'],
+                })
+            result.sort(key=lambda x: x['current_value'], reverse=True)
+            return Response(result)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
+class PnLTrendView(APIView):
+    """VIEW 17: Returns last 30 PortfolioStateSnapshot PnL readings in ascending order."""
+    permission_classes = []
+
+    def get(self, request, portfolio_id):
+        try:
+            get_object_or_404(Portfolio, id=portfolio_id)
+            snapshots = PortfolioStateSnapshot.objects.filter(
+                portfolio_id=portfolio_id
+            ).order_by('-timestamp')[:30]
+
+            # Reverse to get ascending time order
+            snapshots = list(reversed(list(snapshots)))
+
+            if len(snapshots) < 2:
+                return Response([])
+
+            result = []
+            for snap in snapshots:
+                pnl_pct = 0.0
+                if isinstance(snap.state_data, dict):
+                    pnl_pct = float(snap.state_data.get('total_pnl_pct', 0.0))
+                result.append({
+                    'timestamp':    snap.timestamp.isoformat(),
+                    'total_pnl_pct': round(pnl_pct, 4),
+                })
+            return Response(result)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
 class HealthCheckAPIView(APIView):
     """
     Fully implemented, unauthenticated monitoring endpoint. 

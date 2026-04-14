@@ -42,8 +42,9 @@
     <div x-show="!loading" style="display:flex; flex-direction:column; gap:12px; margin-top:16px;">
       <template x-for="p in positions" :key="p.ticker">
          <div style="padding:12px; border-radius:10px; background:var(--bg-body); border:1px solid var(--border-light); display:flex; justify-content:space-between; align-items:center;">
-           <strong x-text="p.ticker"></strong>
+           <strong x-text="p.ticker.ticker ?? p.ticker"></strong>
            <div class="badge" 
+                :data-ws-ticker="p.ticker.ticker ?? p.ticker"
                 :style="`border: 1px solid ${window.CRPMS.riskConfig[p.risk_band]?.border || window.CRPMS.riskConfig.UNKNOWN.border}; color: ${window.CRPMS.riskConfig[p.risk_band]?.text}`">
              <div class="badge-dot" :style="`background: ${window.CRPMS.riskConfig[p.risk_band]?.pulse}`"></div>
              <span x-text="p.risk_band"></span>

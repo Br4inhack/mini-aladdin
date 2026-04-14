@@ -1,0 +1,75 @@
+<!-- components/panels/news_sentiment_panel.html
+     Displays per-ticker FinBERT news with coloured badges and a 7-day sparkline.
+     Controlled entirely by dashboardData().loadNewsForTicker(ticker).
+-->
+
+<!-- Full-width news + sparkline section -->
+<div class="css-grid grid-cols-layout" style="margin-top:0;">
+
+  <!-- Left: News Feed -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <div class="section-title" style="margin:0;">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 12h6m-6 4h2"/></svg>
+        Sentiment News Feed
+      </div>
+      <!-- Ticker selector pill -->
+      <div x-show="selectedNewsTicker" style="display:flex; align-items:center; gap:8px;">
+        <span class="text-muted text-sm">Showing:</span>
+        <span class="badge" style="border:1px solid var(--accent-blue); color:var(--accent-blue);" x-text="selectedNewsTicker"></span>
+      </div>
+    </div>
+
+    <!-- Instruction when no ticker selected -->
+    <div x-show="!selectedNewsTicker" style="padding:24px; text-align:center; color:var(--text-muted);">
+      <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="margin:0 auto 12px; opacity:0.3;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/></svg>
+      <p class="text-sm">Click any holding row above to load its news &amp; sentiment.</p>
+    </div>
+
+    <!-- Article list rendered by JS -->
+    <div id="newsPanelBody" style="max-height:360px; overflow-y:auto;"></div>
+  </div>
+
+  <!-- Right: 7-Day Sentiment Sparkline -->
+  <div class="card">
+    <div class="section-title" style="margin-bottom:16px;">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      7-Day Sentiment Trend
+      <span x-show="selectedNewsTicker" class="text-muted text-sm" x-text="'— ' + selectedNewsTicker" style="margin-left:8px;"></span>
+    </div>
+
+    <!-- Legend -->
+    <div style="display:flex; gap:16px; margin-bottom:12px;">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="width:10px;height:10px;background:#10b981;border-radius:50%;display:inline-block;"></span>
+        <span class="text-sm text-muted">Positive (&gt;0.05)</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="width:10px;height:10px;background:#f59e0b;border-radius:50%;display:inline-block;"></span>
+        <span class="text-sm text-muted">Neutral</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="width:10px;height:10px;background:#ef4444;border-radius:50%;display:inline-block;"></span>
+        <span class="text-sm text-muted">Negative (&lt;-0.05)</span>
+      </div>
+    </div>
+
+    <!-- Sparkline placeholder -->
+    <div x-show="!selectedNewsTicker" style="height:80px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px;">
+      Select a ticker to view trend
+    </div>
+
+    <div x-show="selectedNewsTicker" style="height:200px; position:relative;">
+      <canvas id="sentimentSparkline" style="opacity:0; transition:opacity 0.4s;"></canvas>
+    </div>
+
+    <!-- Interpretation hint -->
+    <div x-show="selectedNewsTicker" style="margin-top:16px; padding:12px; background:rgba(255,255,255,0.02); border-radius:8px; border:1px solid var(--border-light);">
+      <p class="text-sm text-muted" style="line-height:1.6;">
+        Score range: <span class="mono">-1.0</span> (very negative) → <span class="mono">+1.0</span> (very positive).
+        Points shown only on days with published articles. Hollow gaps = no data.
+      </p>
+    </div>
+  </div>
+
+</div>

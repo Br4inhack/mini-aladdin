@@ -7,7 +7,9 @@
   {% include 'components/panels/kpi_row.html' %}
   {% include 'components/panels/charts_row.html' %}
   {% include 'components/panels/insights_row.html' %}
+  {% include 'components/panels/analytics_row.html' %}
   {% include 'components/panels/tables_row.html' %}
+  {% include 'components/panels/news_sentiment_panel.html' %}
 
 </div>
 {% endblock %}
@@ -24,6 +26,9 @@ function dashboardData(pid) {
     positions: [],
     opportunities: [],
     tradeLogs: [],
+    news: [],
+    selectedNewsTicker: null,
+    _sparklineChart: null,
     
     get currentValue() {
       return this.summary.total_capital * (1 + (this.summary.total_pnl_pct / 100));
@@ -54,6 +59,10 @@ function dashboardData(pid) {
         
         this.loading = false;
         
+        // ── WebSocket: supplement REST polling with live push updates ──────
+        CRPMSSocket.init(this.portfolioId);
+        CRPMSSocket.onUpdate(this._handleWsUpdate.bind(this));
+
         // Trigger Chart.js instantiation after DOM bindings execute
         setTimeout(() => {
           this.initCharts();
@@ -138,6 +147,351 @@ function dashboardData(pid) {
           });
         }
       } catch(e) { console.error("Equity chart load failed", e); }
+
+      // 3. Analytics charts — data may arrive slightly after main charts
+      const waitForAnalytics = () => {
+        if (this._sectorData !== undefined && this._pnlData !== undefined) {
+          this.initAnalyticsCharts(this._sectorData, this._pnlData);
+        } else {
+          setTimeout(waitForAnalytics, 150);
+        }
+      };
+      waitForAnalytics();
+    },
+
+    initAnalyticsCharts(sectorData, pnlData) {
+      // ── Sector colour map ─────────────────────────────────────────────────
+      const SECTOR_COLORS = {
+        'IT':             '#3b82f6',  // blue
+        'Banking':        '#10b981',  // green
+        'Pharma':         '#14b8a6',  // teal
+        'Auto':           '#f97316',  // orange
+        'FMCG':           '#eab308',  // yellow
+        'Energy':         '#ef4444',  // red
+        'Metals':         '#a78bfa',  // purple
+        'Finance':        '#06b6d4',  // cyan
+        'Infrastructure': '#84cc16',  // lime
+        'Telecom':        '#ec4899',  // pink
+        'Other':          '#6b7280',  // grey
+      };
+      const getColor = (name) => SECTOR_COLORS[name] || '#6b7280';
+
+      // ── Chart A: Sector Exposure Doughnut ─────────────────────────────────
+      const secSkel  = document.getElementById('sector-skeleton');
+      const secCanvas = document.getElementById('sectorChart');
+      const secEmpty = document.getElementById('sector-empty');
+
+      if (secSkel) secSkel.style.display = 'none';
+
+      if (!sectorData.length) {
+        if (secEmpty)  secEmpty.style.display  = 'flex';
+        if (secCanvas) secCanvas.style.display = 'none';
+      } else {
+        if (secEmpty)  secEmpty.style.display  = 'none';
+        if (secCanvas) secCanvas.style.display = 'block';
+
+        new Chart(secCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: sectorData.map(s => s.sector),
+            datasets: [{
+              data: sectorData.map(s => s.current_value),
+              backgroundColor: sectorData.map(s => getColor(s.sector)),
+              borderWidth: 0,
+              hoverOffset: 6
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            cutout: '68%',
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: {
+                  color: '#9ca3af', padding: 14, usePointStyle: true, pointStyleWidth: 10,
+                  generateLabels: chart => {
+                    return sectorData.map((s, i) => ({
+                      text: `${s.sector}  ${s.sector_pct.toFixed(1)}%`,
+                      fillStyle: getColor(s.sector),
+                      strokeStyle: 'transparent',
+                      index: i
+                    }));
+                  }
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: ctx => {
+                    const s = sectorData[ctx.dataIndex];
+                    return ` ${s.sector}: ${window.CRPMS.inr(s.current_value)}  (${s.sector_pct.toFixed(1)}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // ── Chart B: PnL % Trend Line ─────────────────────────────────────────
+      const pnlSkel   = document.getElementById('pnl-skeleton');
+      const pnlCanvas = document.getElementById('pnlChart');
+      const pnlEmpty  = document.getElementById('pnl-empty');
+
+      if (pnlSkel) pnlSkel.style.display = 'none';
+
+      if (!pnlData || pnlData.length < 2) {
+        if (pnlEmpty)  pnlEmpty.style.display  = 'flex';
+        if (pnlCanvas) pnlCanvas.style.display = 'none';
+      } else {
+        if (pnlEmpty)  pnlEmpty.style.display  = 'none';
+        if (pnlCanvas) pnlCanvas.style.display = 'block';
+
+        const latestPnl  = pnlData[pnlData.length - 1].total_pnl_pct;
+        const lineColor  = latestPnl >= 0 ? '#10b981' : '#ef4444';
+        const fillColor  = latestPnl >= 0 ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)';
+        const labels     = pnlData.map(d => {
+          const dt = new Date(d.timestamp);
+          return dt.toLocaleDateString('en-IN', { day:'2-digit', month:'short', timeZone:'Asia/Kolkata' })
+               + ' ' + dt.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'Asia/Kolkata' });
+        });
+
+        new Chart(pnlCanvas, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              // 0% dashed reference line
+              {
+                label: '0% Line',
+                data: pnlData.map(() => 0),
+                borderColor: 'rgba(107,114,128,0.5)',
+                borderWidth: 1,
+                borderDash: [6, 4],
+                pointRadius: 0,
+                fill: false,
+                tension: 0,
+              },
+              // Actual PnL
+              {
+                label: 'Portfolio PnL %',
+                data: pnlData.map(d => parseFloat(d.total_pnl_pct)),
+                borderColor: lineColor,
+                backgroundColor: fillColor,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                fill: true,
+                tension: 0.3,
+              }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 11 } }
+              },
+              y: {
+                grid: { color: 'rgba(55,65,81,0.4)' },
+                ticks: {
+                  color: '#6b7280',
+                  callback: v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
+                }
+              }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: ctx => ctx.datasetIndex === 1
+                    ? ` PnL: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(3)}%`
+                    : null,
+                  filter: item => item.datasetIndex === 1
+                }
+              }
+            }
+          }
+        });
+      }
+    },
+
+    // ── WebSocket Update Handler ──────────────────────────────────────────────
+    _handleWsUpdate(data) {
+      try {
+        // 1. Update 'Live — HH:MM:SS' in the page subtitle
+        const ts = new Date();
+        const timeStr = ts.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        const subtitle = document.querySelector('.topbar p');
+        if (subtitle) subtitle.textContent = `Live \u2014 last updated ${timeStr}`;
+
+        // 2. PnL card flash animation
+        if (data.total_pnl_pct !== undefined) {
+          const oldPct  = this.summary.total_pnl_pct;
+          const newPct  = parseFloat(data.total_pnl_pct);
+          const pnlCard = document.getElementById('ws-pnl-card');
+          if (pnlCard) {
+            const improved = newPct > oldPct;
+            pnlCard.classList.remove('flash-green', 'flash-red');
+            // Force reflow to restart animation
+            void pnlCard.offsetWidth;
+            pnlCard.classList.add(improved ? 'flash-green' : 'flash-red');
+          }
+          // Update Alpine state — x-text bindings re-render automatically
+          this.summary = { ...this.summary, total_pnl_pct: newPct };
+        }
+
+        // 3. Drawdown guard badge
+        if (data.drawdown_guard_active !== undefined) {
+          this.summary = { ...this.summary, drawdown_guard_active: data.drawdown_guard_active };
+          const badge = document.getElementById('ws-drawdown-badge');
+          if (badge) {
+            badge.textContent = data.drawdown_guard_active ? 'ACTIVE' : 'INACTIVE';
+            badge.style.color = data.drawdown_guard_active ? 'var(--accent-red)' : 'var(--accent-green)';
+            badge.style.borderColor = data.drawdown_guard_active ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.4)';
+          }
+        }
+
+        // 4. Alert count badge
+        if (data.active_alerts !== undefined) {
+          const alertBadge = document.getElementById('ws-alert-count');
+          if (alertBadge) alertBadge.textContent = data.active_alerts;
+        }
+
+        // 5. Per-ticker risk band updates in the heatmap / sentiment stream
+        if (Array.isArray(data.positions) && data.positions.length) {
+          data.positions.forEach(pos => {
+            const ticker = pos.ticker || pos.ticker_symbol;
+            const band   = pos.risk_band;
+            if (!ticker || !band) return;
+            // Update matching elements carrying data-ticker attribute
+            document.querySelectorAll(`[data-ws-ticker="${ticker}"]`).forEach(el => {
+              const cfg = window.CRPMS.riskConfig[band] || window.CRPMS.riskConfig.UNKNOWN;
+              el.textContent = band;
+              el.style.color = cfg.text;
+              el.style.borderColor = cfg.border;
+            });
+          });
+        }
+      } catch (e) {
+        // Never surface raw errors to the user
+        console.warn('[WS handler] Update processing error:', e.message);
+      }
+    },
+
+    // ── News + Sentiment Panel ────────────────────────────────────────────────
+    async loadNewsForTicker(ticker) {
+      if (!ticker) return;
+      this.selectedNewsTicker = ticker;
+      try {
+        const articles = await fetch(`/api/portfolio/${this.portfolioId}/news/${ticker}/`).then(r => r.json());
+        this.news = Array.isArray(articles) ? articles : [];
+        // Render news badges into the panel
+        this._renderNewsBadges();
+        // Fetch and render the 7-day sparkline
+        await this.loadSentimentSparkline(ticker);
+      } catch(e) { console.error("News load failed", e); }
+    },
+
+    _renderNewsBadges() {
+      const container = document.getElementById('newsPanelBody');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (!this.news.length) {
+        container.innerHTML = '<p class="text-muted text-sm" style="padding:16px;">No recent news found.</p>';
+        return;
+      }
+
+      this.news.forEach(a => {
+        const label = a.sentiment_label || 'UNKNOWN';
+        const color = a.sentiment_color || 'grey';
+        const strength = a.sentiment_strength || '';
+        // Map color string to CSS variable
+        const colorMap = { green: 'var(--accent-green)', red: 'var(--accent-red)', yellow: 'var(--accent-yellow)', grey: 'var(--text-muted)' };
+        const cssColor = colorMap[color] || 'var(--text-muted)';
+
+        const item = document.createElement('div');
+        item.style.cssText = 'padding:12px 0; border-bottom:1px solid var(--border-light); display:flex; flex-direction:column; gap:6px;';
+        item.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <a href="${a.ticker?.ticker ? '/dashboard/asset/' + a.ticker.ticker + '/' : '#'}"
+               style="font-size:13px; color:var(--text-main); line-height:1.4; flex:1; text-decoration:none;"
+               target="_blank">${a.headline}</a>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0;">
+              <span style="font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px;
+                           border:1px solid ${cssColor}; color:${cssColor}; white-space:nowrap;">${label}</span>
+              ${strength ? `<span style="font-size:9px; color:var(--text-muted);">${strength}</span>` : ''}
+            </div>
+          </div>
+          <div style="display:flex; gap:12px;">
+            <span class="text-muted" style="font-size:11px;">${a.source || 'Unknown'}</span>
+            <span class="text-muted" style="font-size:11px;">${a.published_at ? a.published_at.substring(0,10) : ''}</span>
+            ${a.sentiment_score !== null ? `<span class="mono" style="font-size:11px; color:${cssColor};">${parseFloat(a.sentiment_score).toFixed(3)}</span>` : ''}
+          </div>`;
+        container.appendChild(item);
+      });
+    },
+
+    async loadSentimentSparkline(ticker) {
+      try {
+        const trend = await fetch(`/api/portfolio/${this.portfolioId}/sentiment-trend/${ticker}/`).then(r => r.json());
+        const canvas = document.getElementById('sentimentSparkline');
+        if (!canvas || !Array.isArray(trend)) return;
+
+        canvas.style.opacity = 1;
+
+        // Determine dominant color from trend data
+        const avgAll = trend.reduce((s, d) => s + d.avg_sentiment, 0) / trend.length;
+        const lineColor = avgAll > 0.05 ? '#10b981' : avgAll < -0.05 ? '#ef4444' : '#f59e0b';
+
+        // Destroy previous chart instance if any
+        if (this._sparklineChart) {
+          this._sparklineChart.destroy();
+          this._sparklineChart = null;
+        }
+
+        this._sparklineChart = new Chart(canvas, {
+          type: 'line',
+          data: {
+            labels: trend.map(d => d.date.substring(5)), // "MM-DD"
+            datasets: [{
+              data: trend.map(d => d.avg_sentiment),
+              borderColor: lineColor,
+              backgroundColor: lineColor.replace(')', ', 0.08)').replace('rgb', 'rgba'),
+              borderWidth: 2,
+              pointRadius: trend.map(d => d.article_count > 0 ? 3 : 0),
+              pointBackgroundColor: lineColor,
+              fill: true,
+              tension: 0.4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 400 },
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: { grid: { display: false }, ticks: { color: '#6b7280', font: { size: 10 } } },
+              y: {
+                min: -1, max: 1,
+                grid: { color: 'rgba(75,85,99,0.3)' },
+                ticks: { color: '#6b7280', font: { size: 10 }, stepSize: 0.5 }
+              }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => ` Avg: ${ctx.parsed.y.toFixed(3)}`,
+                  afterLabel: (ctx) => `Articles: ${trend[ctx.dataIndex]?.article_count || 0}`
+                }
+              }
+            }
+          }
+        });
+      } catch(e) { console.error("Sparkline load failed", e); }
     }
   };
 }
