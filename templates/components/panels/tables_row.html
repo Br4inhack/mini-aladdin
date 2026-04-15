@@ -18,7 +18,16 @@
           </tr>
         </thead>
         <tbody>
-          <tr x-show="loading"><td colspan="4"><div class="skeleton" style="height:32px;"></div></td></tr>
+          <tr x-show="loading"><td colspan="4"><div class="skeleton" style="height:32px; width:100%;"></div><div class="skeleton" style="height:32px; width:100%; margin-top:8px;"></div></td></tr>
+          <tr x-show="!loading && !positions.length">
+            <td colspan="4" style="padding:24px 0;">
+              <div class="crpms-empty" style="border:none;">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <div class="title">No Active Positions</div>
+                <p>This portfolio currently has no open holdings.</p>
+              </div>
+            </td>
+          </tr>
           <template x-for="p in positions" :key="p.ticker">
             <tr
               class="clickable"
@@ -55,6 +64,12 @@
     
     <div style="display:flex; flex-direction:column; gap:16px;">
       <div x-show="loading" class="skeleton" style="height:60px;width:100%;"></div>
+      <div x-show="loading" class="skeleton" style="height:60px;width:100%;"></div>
+      <div x-show="!loading && !opportunities.length" class="crpms-empty">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div class="title">No Opportunities Found</div>
+        <p>The Master Scanner algorithm did not flag any assets.</p>
+      </div>
       <template x-for="opp in opportunities.slice(0, 4)" :key="opp.ticker">
         <div class="interactive" style="display:flex; align-items:center; justify-content:space-between; padding:16px; background:var(--bg-body); border-radius:12px; border:1px solid var(--border-light); transition:transform 0.2s;">
           <div>

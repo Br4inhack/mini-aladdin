@@ -3,144 +3,261 @@
 
 {% block title %}Backtest Runner — CRPMS{% endblock %}
 {% block page_title %}Backtesting Engine{% endblock %}
-{% block page_subtitle %}Test algorithms against historical data{% endblock %}
+{% block page_subtitle %}Test and compare strategies against historical data{% endblock %}
 
 {% block content %}
-<div x-data="backtestApp(1)" x-init="initApp()" x-cloak class="css-grid" style="grid-template-columns: 3fr 9fr; align-items: start;">
+<div x-data="backtestApp(1)" x-init="initApp()" x-cloak class="css-grid" style="grid-template-columns: 280px 1fr; align-items: start; gap: 24px;">
 
-  <!-- ── LEFT SIDEBAR: History ─────────────────────────────────────────── -->
-  <div class="card" style="min-height: calc(100vh - 140px);">
-    <div class="section-title text-muted text-sm" style="margin-bottom:16px;">
-      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-      Run History
+  <!-- ── LEFT SIDEBAR: History + Mode Toggle ──────────────────────────────── -->
+  <div style="display:flex; flex-direction:column; gap:16px;">
+
+    <!-- Mode Toggle -->
+    <div class="card" style="padding:14px 18px;">
+      <div style="display:flex; background:var(--bg-body); border-radius:8px; padding:3px; gap:3px;">
+        <button @click="compareMode = false; compareIds = []; renderChart()"
+                :style="!compareMode ? 'background:var(--accent-blue); color:white; box-shadow:0 2px 8px rgba(59,130,246,0.3);' : 'background:transparent; color:var(--text-muted);'"
+                style="flex:1; border:none; border-radius:6px; padding:7px 4px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;">
+          Single Run
+        </button>
+        <button @click="compareMode = true; compareIds = [selectedId].filter(Boolean)"
+                :style="compareMode ? 'background:var(--accent-blue); color:white; box-shadow:0 2px 8px rgba(59,130,246,0.3);' : 'background:transparent; color:var(--text-muted);'"
+                style="flex:1; border:none; border-radius:6px; padding:7px 4px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s;">
+          Compare
+        </button>
+      </div>
+      <div x-show="compareMode" class="text-muted text-sm" style="margin-top:8px; text-align:center;">
+        Select 2–4 runs to compare
+      </div>
     </div>
-    
-    <div x-show="loading" class="skeleton" style="height:400px; border-radius:8px;"></div>
-    <div class="text-muted text-sm c" x-show="!loading && !history.length" style="padding:24px 0;">No past runs found.</div>
 
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      <template x-for="run in history" :key="run.id">
-        <div @click="selectRun(run.id)" 
-             style="padding:12px; border-radius:8px; cursor:pointer; border:1px solid transparent; transition:all 0.2s; display:flex; justify-content:space-between; align-items:center;"
-             :style="selectedId === run.id ? 'background:var(--bg-active); border-color:var(--accent-blue);' : 'background:var(--bg-surface);'">
-          <div>
-            <div style="font-size:13px; font-weight:600; color:var(--text-main);" x-text="run.run_name || ('Run #' + run.id)"></div>
-            <div style="font-size:11px; color:var(--text-muted); margin-top:4px;" x-text="formatDate(run.created_at)"></div>
-          </div>
-          <div class="badge" 
-               :style="(run.cagr >= 0) ? 'background:rgba(16,185,129,0.1); color:var(--accent-green);' : 'background:rgba(239,68,68,0.1); color:var(--accent-red);'"
-               x-text="(run.cagr >= 0 ? '+' : '') + parseFloat(run.cagr || 0).toFixed(2) + '%'"></div>
-        </div>
-      </template>
-    </div>
-  </div>
-
-  <!-- ── RIGHT CONTENT ─────────────────────────────────────────────────── -->
-  <div style="display:flex; flex-direction:column; gap:24px;">
-
-    <!-- TOP SECTION: Form -->
-    <div class="card" style="padding:20px 24px;">
-      <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;">
+    <!-- Run Backtest Form -->
+    <div class="card" style="padding:16px 18px;">
+      <div class="section-title" style="margin-bottom:12px; font-size:12px;">New Backtest</div>
+      <div style="display:flex; flex-direction:column; gap:10px;">
         <div>
-          <label class="text-muted text-sm" style="display:block; margin-bottom:6px;">Start Date</label>
-          <input type="date" x-model="form.start" class="pill-select" style="min-width:140px;">
+          <label class="text-muted text-sm" style="display:block; margin-bottom:4px;">Start Date</label>
+          <input type="date" x-model="form.start" class="pill-select" style="width:100%;">
         </div>
         <div>
-          <label class="text-muted text-sm" style="display:block; margin-bottom:6px;">End Date</label>
-          <input type="date" x-model="form.end" class="pill-select" style="min-width:140px;">
+          <label class="text-muted text-sm" style="display:block; margin-bottom:4px;">End Date</label>
+          <input type="date" x-model="form.end" class="pill-select" style="width:100%;">
         </div>
-        <button class="btn-action bg-blue-sm text-blue" style="border-color:var(--accent-blue); display:flex; align-items:center; gap:8px;" 
-                @click="runBacktest" :disabled="running">
-          <svg x-show="!running" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <div x-show="running" class="spinner" style="width:14px; height:14px; border-color:var(--accent-blue); border-bottom-color:transparent;"></div>
-          <span x-text="running ? 'Queued / Running...' : 'Run Backtest'"></span>
+        <button class="btn-action" style="width:100%; justify-content:center; border-color:var(--accent-blue); color:var(--accent-blue);" @click="runBacktest" :disabled="running">
+          <div x-show="running" class="spinner" style="width:12px; height:12px; border-color:var(--accent-blue); border-bottom-color:transparent;"></div>
+          <svg x-show="!running" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span x-text="running ? 'Running...' : 'Run Backtest'"></span>
         </button>
       </div>
     </div>
 
-    <!-- MAIN DASHBOARD (Visible if run selected) -->
-    <div x-show="selectedId" style="display:flex; flex-direction:column; gap:24px;">
-      
-      <!-- MIDDLE SECTION: Chart -->
+    <!-- History List -->
+    <div class="card" style="min-height:300px;">
+      <div class="section-title text-muted text-sm" style="margin-bottom:12px;">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Run History
+      </div>
+      <div x-show="loading" class="skeleton" style="height:250px; border-radius:8px;"></div>
+      <div class="text-muted text-sm c" x-show="!loading && !history.length">No past runs found.</div>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <template x-for="run in history" :key="run.id">
+          <div @click="compareMode ? toggleCompare(run.id) : selectRun(run.id)"
+               style="padding:10px 12px; border-radius:8px; cursor:pointer; border:1px solid transparent; transition:all 0.2s;"
+               :style="isSelected(run.id) ? 'background:rgba(59,130,246,0.1); border-color:var(--accent-blue);' : 'background:var(--bg-body); border-color:transparent;'">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-size:12px; font-weight:600; color:var(--text-main);" x-text="run.run_name || ('Run #' + run.id)"></div>
+                <div style="font-size:10px; color:var(--text-muted); margin-top:2px;" x-text="formatDate(run.created_at)"></div>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <div class="badge" style="font-size:10px; padding:3px 7px;"
+                     :style="(run.cagr >= 0) ? 'background:rgba(16,185,129,0.1); color:var(--accent-green);' : 'background:rgba(239,68,68,0.1); color:var(--accent-red);'"
+                     x-text="(run.cagr >= 0 ? '+' : '') + parseFloat(run.cagr || 0).toFixed(1) + '%'"></div>
+                <!-- compare checkbox -->
+                <div x-show="compareMode" style="width:16px; height:16px; border-radius:4px; border:1px solid var(--border-light); display:flex; align-items:center; justify-content:center;"
+                     :style="compareIds.includes(run.id) ? 'background:var(--accent-blue); border-color:var(--accent-blue);' : ''">
+                  <svg x-show="compareIds.includes(run.id)" width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT CONTENT ─────────────────────────────────────────────────────── -->
+  <div style="display:flex; flex-direction:column; gap:24px;">
+
+    <!-- No selection state -->
+    <div x-show="!selectedId && !compareMode" class="crpms-empty" style="border:none;">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      <div>
+        <div class="title">No Run Selected</div>
+        <p>Select a run from the history sidebar to view results.</p>
+      </div>
+    </div>
+
+    <!-- ── SINGLE MODE ──────────────────────────────────────────────────────── -->
+    <div x-show="!compareMode && selectedId" style="display:flex; flex-direction:column; gap:24px;">
+
+      <!-- Metrics bar chart -->
       <div class="card">
-        <div class="section-title" style="display:flex; justify-content:space-between;">
+        <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
           <div style="display:flex; align-items:center;">
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 13v-1m4 1v-3m4 3V8M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
             Strategy vs Benchmark
           </div>
-          <!-- Dropdown requested in prompt to switch between past results from chart header -->
-          <select x-model="selectedId" @change="selectRun(parseInt($event.target.value))" class="pill-select" style="min-width:200px; font-weight:normal;">
+          <select x-model="selectedId" @change="selectRun(parseInt($event.target.value))" class="pill-select" style="font-weight:normal; font-size:12px;">
             <template x-for="r in history" :key="r.id">
-              <option :value="r.id" x-text="(r.run_name || 'Run #' + r.id) + ' (' + formatDate(r.created_at) + ')'"></option>
+              <option :value="r.id" x-text="(r.run_name || 'Run #' + r.id) + ' — ' + formatDate(r.created_at)"></option>
             </template>
           </select>
         </div>
-        
-        <div style="height:280px; position:relative; margin-top:20px;">
-          <canvas id="comparisonChart"></canvas>
+        <div style="height:260px; position:relative; margin-top:16px;">
+          <canvas id="singleMetricChart"></canvas>
         </div>
       </div>
 
-      <!-- BOTTOM SECTION: Stats Table -->
+      <!-- Metrics Table -->
       <div class="card">
         <div class="section-title">
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
           Metrics Comparison
         </div>
-        
         <div class="table-container" style="margin-top:16px;">
           <table>
             <thead>
               <tr>
-                <th style="width:30%;">Metric</th>
-                <th class="c" style="width:35%; border-bottom:2px solid var(--accent-blue);">Strategy</th>
-                <th class="c" style="width:35%;">Benchmark</th>
+                <th>Metric</th>
+                <th class="c" style="border-bottom:2px solid var(--accent-blue);">Strategy</th>
+                <th class="c">Benchmark</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td class="text-muted">Total Return (CAGR)</td>
-                <td class="c mono" :class="isStrategyWin('cagr') ? 'text-green font-bold' : ''" x-text="formatPct(selectedRun.cagr)"></td>
-                <td class="c mono" :class="isBenchmarkWin('cagr') ? 'text-green font-bold' : ''" x-text="formatPct((selectedRun.benchmark_results||{}).cagr)"></td>
+                <td class="text-muted">CAGR</td>
+                <td class="c mono" :class="isStrategyWin('cagr') ? 'win-cell' : ''" x-text="fmt(selectedRun.cagr) + '%'"></td>
+                <td class="c mono text-muted" x-text="fmt((selectedRun.benchmark_results||{}).cagr) + '%'"></td>
               </tr>
               <tr>
                 <td class="text-muted">Sharpe Ratio</td>
-                <td class="c mono" :class="isStrategyWin('sharpe_ratio') ? 'text-green font-bold' : ''" x-text="formatFloat(selectedRun.sharpe_ratio)"></td>
-                <td class="c mono" :class="isBenchmarkWin('sharpe_ratio') ? 'text-green font-bold' : ''" x-text="formatFloat((selectedRun.benchmark_results||{}).sharpe_ratio)"></td>
+                <td class="c mono" :class="isStrategyWin('sharpe_ratio') ? 'win-cell' : ''" x-text="fmtF(selectedRun.sharpe_ratio)"></td>
+                <td class="c mono text-muted" x-text="fmtF((selectedRun.benchmark_results||{}).sharpe_ratio)"></td>
               </tr>
               <tr>
-                <td class="text-muted">Max Drawdown <span style="font-size:10px;">(Lower is better) 👇</span></td>
-                <!-- Drawdown is negative, so greater (closer to 0) is better -->
-                <td class="c mono" :class="isStrategyWinDrawdown() ? 'text-green font-bold' : ''" x-text="formatPct(selectedRun.max_drawdown)"></td>
-                <td class="c mono" :class="isBenchmarkWinDrawdown() ? 'text-green font-bold' : ''" x-text="formatPct((selectedRun.benchmark_results||{}).max_drawdown)"></td>
+                <td class="text-muted">Max Drawdown 👇 <span class="text-sm">(lower better)</span></td>
+                <td class="c mono" :class="isStrategyWinDD() ? 'win-cell' : ''" x-text="fmt(selectedRun.max_drawdown) + '%'"></td>
+                <td class="c mono text-muted" x-text="fmt((selectedRun.benchmark_results||{}).max_drawdown) + '%'"></td>
               </tr>
               <tr>
-                <td class="text-muted">Run Period</td>
-                <td class="c mono text-sm" colspan="2" style="background:var(--bg-surface);">
-                  <span x-text="selectedRun.start_date"></span> &nbsp;&rarr;&nbsp; <span x-text="selectedRun.end_date"></span>
-                </td>
+                <td class="text-muted">Win Rate</td>
+                <td class="c mono" x-text="selectedRun.win_rate != null ? fmt(selectedRun.win_rate) + '%' : '—'"></td>
+                <td class="c mono text-muted">—</td>
               </tr>
               <tr>
-                <td class="text-muted">Notes</td>
-                <td colspan="2" class="text-sm text-muted">
-                  <div x-show="selectedRun.config?.tickers_tested">
-                    <span class="font-bold text-main">Tickers:</span> <span x-text="selectedRun.config?.tickers_tested"></span>
-                  </div>
-                  <div x-show="selectedRun.config?.data_source">
-                    <span class="font-bold text-main">Source:</span> <span x-text="selectedRun.config?.data_source"></span>
-                  </div>
-                  <div x-show="!selectedRun.config?.tickers_tested && !selectedRun.config?.data_source">
-                    No run notes available.
-                  </div>
-                </td>
+                <td class="text-muted">Period</td>
+                <td class="c mono text-sm" colspan="2" x-text="(selectedRun.start_date || '') + ' → ' + (selectedRun.end_date || '')"></td>
+              </tr>
+              <tr>
+                <td class="text-muted">Tickers</td>
+                <td class="text-sm" colspan="2" x-text="selectedRun.config?.tickers_tested || '—'"></td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
-      
     </div>
 
+    <!-- ── COMPARE MODE ─────────────────────────────────────────────────────── -->
+    <div x-show="compareMode" style="display:flex; flex-direction:column; gap:24px;">
+
+      <div x-show="compareIds.length < 2" class="crpms-empty" style="border:none;">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>
+        <div>
+          <div class="title">Select Runs to Compare</div>
+          <p>Select at least <strong style="color:var(--accent-blue);">2 runs</strong> from the sidebar to compare.</p>
+        </div>
+        <div class="text-muted text-sm" style="margin-top:8px;"><span x-text="compareIds.length"></span> / 4 selected</div>
+      </div>
+
+      <!-- Equity Curve Comparison Chart -->
+      <div class="card" x-show="compareIds.length >= 2">
+        <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+            Multi-Run Comparison
+          </div>
+          <span class="badge" style="background:rgba(59,130,246,0.1); color:var(--accent-blue);">
+            <span x-text="compareIds.length"></span> runs selected
+          </span>
+        </div>
+
+        <!-- Compare Metrics Chart -->
+        <div style="height:300px; position:relative; margin-top:20px;">
+          <canvas id="compareMetricChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Side-by-side metrics table -->
+      <div class="card" x-show="compareIds.length >= 2">
+        <div class="section-title">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Side-by-Side Metrics
+        </div>
+        <div class="table-container" style="margin-top:16px; overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <template x-for="(run, i) in compareRuns" :key="run.id">
+                  <th class="c" :style="`border-bottom:2px solid ${compareColors[i]};`" x-text="run.run_name || ('Run #' + run.id)"></th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-muted">CAGR</td>
+                <template x-for="run in compareRuns" :key="run.id">
+                  <td class="c mono"
+                      :class="bestId('cagr') === run.id ? 'win-cell' : ''"
+                      x-text="fmt(run.cagr) + '%'"></td>
+                </template>
+              </tr>
+              <tr>
+                <td class="text-muted">Sharpe Ratio</td>
+                <template x-for="run in compareRuns" :key="run.id">
+                  <td class="c mono"
+                      :class="bestId('sharpe_ratio') === run.id ? 'win-cell' : ''"
+                      x-text="fmtF(run.sharpe_ratio)"></td>
+                </template>
+              </tr>
+              <tr>
+                <td class="text-muted">Max Drawdown 👇</td>
+                <template x-for="run in compareRuns" :key="run.id">
+                  <td class="c mono"
+                      :class="bestDrawdownId() === run.id ? 'win-cell' : ''"
+                      x-text="fmt(run.max_drawdown) + '%'"></td>
+                </template>
+              </tr>
+              <tr>
+                <td class="text-muted">Win Rate</td>
+                <template x-for="run in compareRuns" :key="run.id">
+                  <td class="c mono" x-text="run.win_rate != null ? fmt(run.win_rate) + '%' : '—'"></td>
+                </template>
+              </tr>
+              <tr>
+                <td class="text-muted">Period</td>
+                <template x-for="run in compareRuns" :key="run.id">
+                  <td class="c mono text-sm" x-text="(run.start_date||'') + '→' + (run.end_date||'')"></td>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
 
@@ -149,52 +266,50 @@
   .pill-select:focus { border-color:var(--accent-blue); }
   .pill-select option { background:var(--bg-sidebar); }
   input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor:pointer; }
-  .spinner { border: 2px solid rgba(255,255,255,0.1); border-radius: 50%; border-top-color: var(--accent-blue); animation: spin 1s ease-in-out infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .font-bold { font-weight: 700; }
-  .text-green { color: var(--accent-green); }
+  .spinner { width:12px; height:12px; border:2px solid rgba(255,255,255,0.1); border-radius:50%; border-top-color:var(--accent-blue); animation:spin 1s linear infinite; display:inline-block; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .win-cell { color:var(--accent-green); font-weight:700; }
+  .font-bold { font-weight:700; }
 </style>
 {% endblock %}
 
 {% block scripts %}
 <script>
+const COMPARE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+
 function backtestApp(pid) {
   return {
     portfolioId: pid,
     loading: true,
     running: false,
+    compareMode: false,
     history: [],
     selectedId: null,
     selectedRun: {},
+    compareIds: [],
+    compareRuns: [],
+    compareColors: COMPARE_COLORS,
     _chart: null,
+    _cmpChart: null,
     _pollTimer: null,
-    
-    form: {
-      start: '',
-      end: ''
-    },
+    form: { start: '', end: '' },
 
     initApp() {
-      // Default dates: today - 90 down to today
       const end = new Date();
-      const start = new Date(end.getTime() - (90 * 24 * 60 * 60 * 1000));
-      this.form.end = end.toISOString().split('T')[0];
+      const start = new Date(end - 90*86400000);
+      this.form.end   = end.toISOString().split('T')[0];
       this.form.start = start.toISOString().split('T')[0];
-
       this.loadHistory();
     },
 
-    async loadHistory(autoSelectLatest = true) {
+    async loadHistory(autoSelect = true) {
       try {
         const res = await fetch(`/api/portfolio/${this.portfolioId}/backtest-results/`).then(r => r.json());
         this.history = Array.isArray(res) ? res : (res.results || []);
         this.loading = false;
-        
-        if (this.history.length > 0 && autoSelectLatest) {
-          this.selectRun(this.history[0].id);
-        }
+        if (this.history.length && autoSelect && !this.compareMode) this.selectRun(this.history[0].id);
         return this.history.length;
-      } catch(e) { console.error('Failed to load history', e); this.loading = false; return 0; }
+      } catch(e) { this.loading = false; return 0; }
     },
 
     async selectRun(id) {
@@ -202,84 +317,70 @@ function backtestApp(pid) {
       try {
         const run = await fetch(`/api/portfolio/${this.portfolioId}/backtest-results/${id}/`).then(r => r.json());
         this.selectedRun = run;
-        this.renderChart();
-      } catch(e) { console.error('Failed to load detail', e); }
+        this.$nextTick(() => this.renderSingleChart());
+      } catch(e) { console.error(e); }
+    },
+
+    isSelected(id) {
+      return this.compareMode ? this.compareIds.includes(id) : this.selectedId === id;
+    },
+
+    async toggleCompare(id) {
+      if (this.compareIds.includes(id)) {
+        this.compareIds = this.compareIds.filter(x => x !== id);
+      } else {
+        if (this.compareIds.length >= 4) return;
+        this.compareIds.push(id);
+      }
+      if (this.compareIds.length >= 2) await this.loadCompareRuns();
+    },
+
+    async loadCompareRuns() {
+      const fetches = this.compareIds.map(id =>
+        fetch(`/api/portfolio/${this.portfolioId}/backtest-results/${id}/`).then(r => r.json())
+      );
+      this.compareRuns = await Promise.all(fetches);
+      this.$nextTick(() => this.renderCompareChart());
     },
 
     async runBacktest() {
       if (this.running) return;
       this.running = true;
-      
       try {
-        const payload = new FormData();
-        payload.append('start_date', this.form.start);
-        payload.append('end_date', this.form.end);
-        
+        const fd = new FormData();
+        fd.append('start_date', this.form.start);
+        fd.append('end_date',   this.form.end);
         await fetch(`/api/portfolio/${this.portfolioId}/run-backtest/`, {
           method: 'POST',
           headers: {'X-CSRFToken': this.getCookie('csrftoken')},
-          body: payload
+          body: fd
         });
-        
-        // Start polling
         const initialCount = this.history.length;
         this._pollTimer = setInterval(async () => {
-          const newCount = await this.loadHistory(false);
-          if (newCount > initialCount) {
-             // New result appeared!
-             clearInterval(this._pollTimer);
-             this.running = false;
-             this.selectRun(this.history[0].id); // Auto select new
+          const n = await this.loadHistory(false);
+          if (n > initialCount) {
+            clearInterval(this._pollTimer);
+            this.running = false;
+            this.selectRun(this.history[0].id);
           }
         }, 3000);
-        
-      } catch(e) { 
-        console.error('Run failed', e); 
-        this.running = false; 
-      }
+      } catch(e) { this.running = false; }
     },
 
-    renderChart() {
-      const canvas = document.getElementById('comparisonChart');
+    // ── Charts ──────────────────────────────────────────────────────────
+    renderSingleChart() {
+      const canvas = document.getElementById('singleMetricChart');
       if (!canvas) return;
       if (this._chart) this._chart.destroy();
-
-      const strat = this.selectedRun;
-      const bmark = strat.benchmark_results || {};
-
-      const dataStrategy = [
-        parseFloat(strat.cagr || 0),
-        parseFloat(strat.max_drawdown || 0),
-        parseFloat(strat.sharpe_ratio || 0)
-      ];
-
-      const dataBmark = [
-        parseFloat(bmark.cagr || 0),
-        parseFloat(bmark.max_drawdown || 0),
-        parseFloat(bmark.sharpe_ratio || 0)
-      ];
-
+      const s = this.selectedRun;
+      const b = s.benchmark_results || {};
       this._chart = new Chart(canvas, {
         type: 'bar',
         data: {
-          labels: ['Total Return (CAGR) %', 'Max Drawdown % \u2193', 'Sharpe Ratio'],
+          labels: ['CAGR %', 'Max Drawdown % ↓', 'Sharpe Ratio'],
           datasets: [
-            {
-              label: 'Strategy',
-              data: dataStrategy,
-              backgroundColor: '#3b82f6',
-              borderRadius: 4,
-              barPercentage: 0.8,
-              categoryPercentage: 0.5
-            },
-            {
-              label: 'Benchmark',
-              data: dataBmark,
-              backgroundColor: '#6b7280',
-              borderRadius: 4,
-              barPercentage: 0.8,
-              categoryPercentage: 0.5
-            }
+            { label: 'Strategy',  data: [+s.cagr||0, +s.max_drawdown||0, +s.sharpe_ratio||0], backgroundColor: '#3b82f6', borderRadius: 5, barPercentage: 0.7 },
+            { label: 'Benchmark', data: [+b.cagr||0, +b.max_drawdown||0, +b.sharpe_ratio||0], backgroundColor: '#6b7280', borderRadius: 5, barPercentage: 0.7 }
           ]
         },
         options: {
@@ -287,63 +388,68 @@ function backtestApp(pid) {
           interaction: { mode: 'index', intersect: false },
           scales: {
             x: { grid: { display: false }, ticks: { color: '#9ca3af' } },
-            y: { grid: { color: 'rgba(75,85,99,0.3)' }, ticks: { color: '#9ca3af' } }
+            y: { grid: { color: 'rgba(75,85,99,0.2)' }, ticks: { color: '#9ca3af' } }
           },
-          plugins: {
-            legend: { labels: { color: '#9ca3af', padding: 20, usePointStyle: true } }
-          }
+          plugins: { legend: { labels: { color: '#9ca3af', usePointStyle: true } } }
         }
       });
     },
 
-    // ── Utility Methods ─────────────────────────────────
-    formatDate(iso) {
-      if(!iso) return '';
-      const d = new Date(iso);
-      return d.toLocaleDateString('en-IN', {day:'2-digit', month:'short'}) + ' ' + d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:false});
+    renderCompareChart() {
+      const canvas = document.getElementById('compareMetricChart');
+      if (!canvas) return;
+      if (this._cmpChart) this._cmpChart.destroy();
+      const labels = ['CAGR %', 'Sharpe Ratio', 'Max Drawdown %'];
+      const datasets = this.compareRuns.map((run, i) => ({
+        label: run.run_name || ('Run #' + run.id),
+        data: [+run.cagr||0, +run.sharpe_ratio||0, +run.max_drawdown||0],
+        backgroundColor: COMPARE_COLORS[i] + '99',
+        borderColor: COMPARE_COLORS[i],
+        borderWidth: 2,
+        borderRadius: 5,
+        barPercentage: 0.7
+      }));
+      this._cmpChart = new Chart(canvas, {
+        type: 'bar',
+        data: { labels, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#9ca3af' } },
+            y: { grid: { color: 'rgba(75,85,99,0.2)' }, ticks: { color: '#9ca3af' } }
+          },
+          plugins: { legend: { labels: { color: '#9ca3af', usePointStyle: true } } }
+        }
+      });
     },
-    formatPct(num) {
-      if(num == null) return '—';
-      return parseFloat(num).toFixed(2) + '%';
-    },
-    formatFloat(num) {
-      if(num == null) return '—';
-      return parseFloat(num).toFixed(3);
-    },
+
+    // ── Win Detection ────────────────────────────────────────────────────
     isStrategyWin(key) {
-      const s = parseFloat(this.selectedRun[key] || 0);
-      const b = parseFloat((this.selectedRun.benchmark_results||{})[key] || 0);
-      return s > b;
+      return (+this.selectedRun[key]||0) > (+(this.selectedRun.benchmark_results||{})[key]||0);
     },
-    isBenchmarkWin(key) {
-      const s = parseFloat(this.selectedRun[key] || 0);
-      const b = parseFloat((this.selectedRun.benchmark_results||{})[key] || 0);
-      return b > s;
+    isStrategyWinDD() {
+      return (+this.selectedRun.max_drawdown||0) > (+((this.selectedRun.benchmark_results||{}).max_drawdown)||(-100));
     },
-    isStrategyWinDrawdown() {
-      // Drawdown is typically negative, so a higher value (less negative, closer to 0) is better.
-      const s = parseFloat(this.selectedRun.max_drawdown || 0);
-      const b = parseFloat((this.selectedRun.benchmark_results||{}).max_drawdown || -100);
-      return s > b; // e.g. -10 > -20
+    bestId(key) {
+      if (!this.compareRuns.length) return null;
+      return this.compareRuns.reduce((best, r) => (+r[key]||0) > (+best[key]||0) ? r : best).id;
     },
-    isBenchmarkWinDrawdown() {
-      const s = parseFloat(this.selectedRun.max_drawdown || 0);
-      const b = parseFloat((this.selectedRun.benchmark_results||{}).max_drawdown || 0);
-      return b > s;
+    bestDrawdownId() {
+      if (!this.compareRuns.length) return null;
+      return this.compareRuns.reduce((best, r) => (+r.max_drawdown||0) > (+best.max_drawdown||(-999)) ? r : best).id;
+    },
+
+    // ── Utils ────────────────────────────────────────────────────────────
+    fmt(n) { return n == null ? '—' : parseFloat(n).toFixed(2); },
+    fmtF(n) { return n == null ? '—' : parseFloat(n).toFixed(3); },
+    formatDate(iso) {
+      if (!iso) return '';
+      return new Date(iso).toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'2-digit'});
     },
     getCookie(name) {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-          const cookie = cookies[i].trim();
-          if (cookie.substring(0, name.length + 1) === (name + '=')) {
-            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-            break;
-          }
-        }
-      }
-      return cookieValue;
+      const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+      return m ? decodeURIComponent(m.pop()) : '';
     }
   };
 }

@@ -601,7 +601,208 @@ class MacroIndicatorView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=500)
 
+class FeatureImportanceView(APIView):
+    """VIEW 22: Returns feature importance scores from the latest AgentOutput.
+    
+    Reads raw_data['feature_importance'] from the most recent market_risk AgentOutput
+    for any position in the portfolio. Falls back to an empty list gracefully.
+    When Person 3 stores feature_importance in raw_data, this auto-surfaces it.
+    """
+    permission_classes = []
+
+    def get(self, request, portfolio_id):
+        try:
+            get_object_or_404(Portfolio, id=portfolio_id)
+            ticker_ids = Position.objects.filter(
+                portfolio_id=portfolio_id
+            ).values_list('watchlist_id', flat=True)
+
+            # Try to get feature importance from latest market_risk agent output
+            latest = AgentOutput.objects.filter(
+                ticker_id__in=ticker_ids,
+                agent_name='market_risk'
+            ).order_by('-timestamp').first()
+
+            if not latest:
+                return Response({'features': [], 'ticker': None, 'available': False})
+
+            raw = latest.raw_data or {}
+            fi = raw.get('feature_importance', {})
+
+            if not fi:
+                # Generate illustrative mock from flags/risk features for demo
+                # This is how it looks when Person 3's model is not yet integrated
+                fi = {
+                    'Value at Risk (VaR)': 0.85,
+                    'Beta vs Nifty50': 0.72,
+                    'RSI (14d)': 0.68,
+                    'Sentiment Score': 0.55,
+                    'Volume Anomaly': 0.48,
+                    'Max Drawdown': 0.44,
+                    'Momentum (20d)': 0.38,
+                    'Debt/Equity Ratio': 0.31,
+                    'P/E Ratio': 0.24,
+                }
+
+            features = sorted(
+                [{'feature': k, 'score': round(float(v), 4)} for k, v in fi.items()],
+                key=lambda x: x['score'],
+                reverse=True
+            )
+
+            return Response({
+                'features': features,
+                'ticker': str(latest.ticker_id),
+                'band': latest.band,
+                'available': True,
+                'source': 'live' if raw.get('feature_importance') else 'demo'
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
+class RLAgentLogView(APIView):
+    """VIEW 23: Returns RL/Decision agent monitoring data.
+    
+    Reads DecisionLog records to surface action distribution and confidence
+    trend. When Person 4's RL agent is integrated, episode rewards will appear
+    in input_signals['episode_reward']. Falls back gracefully until then.
+    """
+    permission_classes = []
+
+    def get(self, request, portfolio_id):
+        try:
+            get_object_or_404(Portfolio, id=portfolio_id)
+            ticker_ids = Position.objects.filter(
+                portfolio_id=portfolio_id
+            ).values_list('watchlist_id', flat=True)
+
+            logs = list(
+                DecisionLog.objects.filter(
+                    ticker_id__in=ticker_ids
+                ).order_by('-timestamp')[:100]
+            )
+
+            if not logs:
+                return Response({'logs': [], 'action_dist': {}, 'confidence_trend': [], 'available': False})
+
+            # Action distribution
+            action_dist = defaultdict(int)
+            for log in logs:
+                action_dist[log.action] += 1
+
+            # Confidence trend — last 30 logs, oldest first
+            trend_logs = sorted(logs[:30], key=lambda x: x.timestamp)
+            confidence_trend = [
+                {
+                    'timestamp': log.timestamp.isoformat(),
+                    'confidence': round(log.confidence_score, 3),
+                    'action': log.action,
+                    'ticker': str(log.ticker_id),
+                    'episode_reward': (log.input_signals or {}).get('episode_reward', None)
+                }
+                for log in trend_logs
+            ]
+
+            # Episode rewards (RL-specific — populated by Person 4)
+            episode_rewards = [
+                {'step': i, 'reward': x['episode_reward']}
+                for i, x in enumerate(confidence_trend)
+                if x['episode_reward'] is not None
+            ]
+
+            return Response({
+                'logs': [
+                    {
+                        'action': log.action,
+                        'confidence_score': log.confidence_score,
+                        'ticker': str(log.ticker_id),
+                        'timestamp': log.timestamp.isoformat(),
+                        'reasoning_text': log.reasoning_text[:120] if log.reasoning_text else ''
+                    }
+                    for log in logs[:20]
+                ],
+                'action_dist': dict(action_dist),
+                'confidence_trend': confidence_trend,
+                'episode_rewards': episode_rewards,
+                'total_decisions': len(logs),
+                'available': True
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
+class PaperTradesView(APIView):
+    """VIEW 24: Returns simulated paper trade order previews.
+    
+    Reads the latest DecisionLog entries and computes what orders the system
+    would place if PAPER_TRADING were enabled. Never executes real orders.
+    When Person 1 builds the Kite skeleton, this endpoint will integrate with
+    their paper order book. Until then it returns decision-based previews.
+    """
+    permission_classes = []
+
+    def get(self, request, portfolio_id):
+        from django.conf import settings
+        try:
+            get_object_or_404(Portfolio, id=portfolio_id)
+            paper_trading_enabled = getattr(settings, 'FEATURES', {}).get('PAPER_TRADING', False)
+
+            ticker_ids = Position.objects.filter(
+                portfolio_id=portfolio_id
+            ).values_list('watchlist_id', flat=True)
+
+            positions = {
+                p.watchlist_id: p
+                for p in Position.objects.filter(
+                    portfolio_id=portfolio_id
+                ).select_related('watchlist')
+            }
+
+            logs = DecisionLog.objects.filter(
+                ticker_id__in=ticker_ids,
+                action__in=['REDUCE', 'EXIT', 'INCREASE', 'REALLOCATE']
+            ).order_by('-timestamp')[:20]
+
+            orders = []
+            for log in logs:
+                pos = positions.get(log.ticker_id)
+                if not pos:
+                    continue
+                price = float(pos.current_price or pos.avg_buy_price or 0)
+                action_map = {
+                    'EXIT':       ('SELL', pos.quantity),
+                    'REDUCE':     ('SELL', max(1, pos.quantity // 4)),
+                    'INCREASE':   ('BUY',  max(1, pos.quantity // 4)),
+                    'REALLOCATE': ('SELL', max(1, pos.quantity // 2)),
+                }
+                direction, qty = action_map.get(log.action, ('HOLD', 0))
+                if qty == 0:
+                    continue
+
+                orders.append({
+                    'ticker':       str(log.ticker_id),
+                    'direction':    direction,
+                    'quantity':     qty,
+                    'est_price':    round(price, 2),
+                    'est_value':    round(price * qty, 2),
+                    'trigger_action': log.action,
+                    'confidence':   round(log.confidence_score, 2),
+                    'timestamp':    log.timestamp.isoformat(),
+                    'status':       'SIMULATED'
+                })
+
+            return Response({
+                'enabled': paper_trading_enabled,
+                'orders': orders,
+                'disclaimer': 'These are simulated orders only. No real trades are executed.'
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
 class HealthCheckAPIView(APIView):
+
     """
     Fully implemented, unauthenticated monitoring endpoint. 
     Verifies the operational status of the PostgreSQL database and Redis Cache.

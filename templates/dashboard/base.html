@@ -102,6 +102,7 @@
     .ist-clock   { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500; color: var(--accent-blue); background: var(--accent-blue-bg); border: 1px solid rgba(59, 130, 246, 0.2); padding: 8px 14px; border-radius: 8px; }
     .btn-action  { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-main); background: var(--bg-surface); border: 1px solid var(--border-light); transition: all 0.2s; }
     .btn-action:hover { background: var(--bg-surface-hover); border-color: var(--text-muted); box-shadow: var(--shadow-surface); }
+    .btn-action:active { transform: scale(0.96); }
 
     /* ── Reusable Component Atoms ────────────────────────────────────────── */
     
@@ -181,8 +182,21 @@
     [x-cloak] { display: none !important; }
 
     /* Skeleton Loading */
-    .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%); background-size: 200%; animation: shimmer 1.5s infinite; border-radius: 6px; color: transparent !important; }
+    .skeleton { 
+      background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.02) 75%); 
+      background-size: 200% 100%; 
+      animation: shimmer 1.5s infinite linear; 
+      border-radius: 6px; 
+      color: transparent !important; 
+    }
+    .skeleton * { visibility: hidden; }
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* Empty States */
+    .crpms-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:48px 24px; border:1px dashed var(--border-light); border-radius:12px; background:rgba(255,255,255,0.01); color:var(--text-muted); gap:12px; }
+    .crpms-empty svg { width:42px; height:42px; color:rgba(255,255,255,0.15); }
+    .crpms-empty .title { font-size:14px; font-weight:600; color:var(--text-main); margin-bottom:4px; }
+    .crpms-empty p { font-size:13px; line-height:1.5; max-width:300px; }
 
     /* WebSocket status dot */
     .ws-status { display: flex; align-items: center; gap: 7px; padding: 6px 12px; border: 1px solid var(--border-light); border-radius: 8px; font-size: 12px; font-weight: 600; background: var(--bg-surface); transition: border-color 0.3s, color 0.3s; }
@@ -198,10 +212,27 @@
     .flash-red   { animation: flashRed   0.8s ease; }
     .live-value  { transition: color 0.3s ease; }
 
+    /* Toast Notifications */
+    .crpms-toast { pointer-events:all; display:flex; align-items:flex-start; gap:12px; padding:14px 18px; border-radius:12px; background:var(--bg-surface); border:1px solid var(--border-light); box-shadow:0 8px 30px rgba(0,0,0,0.4); min-width:300px; max-width:380px; animation:toastIn 0.35s cubic-bezier(0.34,1.56,0.64,1); }
+    @keyframes toastIn { from { transform:translateX(120%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+    @keyframes toastOut { to { transform:translateX(120%); opacity:0; } }
+    .crpms-toast.removing { animation:toastOut 0.3s ease forwards; }
+    .crpms-toast .t-icon { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .crpms-toast .t-body { flex:1; }
+    .crpms-toast .t-title { font-size:13px; font-weight:700; color:var(--text-main); margin-bottom:3px; }
+    .crpms-toast .t-msg { font-size:12px; color:var(--text-muted); line-height:1.4; }
+    .crpms-toast .t-close { font-size:18px; color:var(--text-muted); cursor:pointer; line-height:1; flex-shrink:0; padding:0 2px; }
+    .crpms-toast .t-close:hover { color:var(--text-main); }
+    .crpms-toast .t-bar { position:absolute; bottom:0; left:0; height:3px; border-radius:0 0 12px 12px; animation:countdown linear forwards; }
+    @keyframes countdown { from { width:100%; } to { width:0%; } }
+
   </style>
 </head>
 
 <body>
+<!-- ── Toast Notification Container ──────────────────────────────────── -->
+<div id="crpms-toast-stack" style="position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:10px; pointer-events:none;"></div>
+
 <div class="app-shell">
 
   <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
@@ -249,6 +280,15 @@
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         Settings
       </a>
+      <div class="nav-label">AI Engine</div>
+      <a href="/dashboard/rl-monitor/" class="nav-link {% if 'rl-monitor' in request.path %}active{% endif %}">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        RL Agent Monitor
+      </a>
+      <a href="/dashboard/paper-trading/" class="nav-link {% if 'paper-trading' in request.path %}active{% endif %}">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        Paper Trading
+      </a>
     </nav>
 
     <div class="sidebar-footer">
@@ -277,6 +317,10 @@
                 x-text="$store.wsStatus === 'connected' ? 'Live' : $store.wsStatus === 'connecting' ? 'Connecting…' : 'Offline'"
           ></span>
         </div>
+
+        <button onclick="window.location.reload()" class="btn-action" title="Refresh Dashboard">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
 
         <button onclick="window.location.href='/api/portfolio/1/export/positions/csv/'" class="btn-action" title="Export Ledger as CSV">
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -467,6 +511,98 @@ if (typeof Chart !== 'undefined') {
   };
 })();
 </script>
+
+<!-- ── CRPMS Toast System ──────────────────────────────────────────── -->
+<script>
+(function () {
+  'use strict';
+
+  var _prevAlertCount = null;
+
+  // ── Public API ────────────────────────────────────────────────────
+  window.CRPMSToast = {
+    /** Show a toast. type: 'alert'|'info'|'success'|'warning' */
+    show: function (opts) {
+      var type     = opts.type    || 'info';
+      var title    = opts.title   || 'Notification';
+      var message  = opts.message || '';
+      var duration = opts.duration || 5000;
+
+      var colorMap = {
+        alert:   { bg: 'rgba(239,68,68,0.15)',   border: '#ef4444', icon: '#ef4444',   iconBg: 'rgba(239,68,68,0.2)',   bar: '#ef4444'   },
+        warning: { bg: 'rgba(245,158,11,0.12)',  border: '#f59e0b', icon: '#f59e0b',   iconBg: 'rgba(245,158,11,0.2)',  bar: '#f59e0b'   },
+        success: { bg: 'rgba(16,185,129,0.12)',  border: '#10b981', icon: '#10b981',   iconBg: 'rgba(16,185,129,0.2)',  bar: '#10b981'   },
+        info:    { bg: 'rgba(59,130,246,0.12)',  border: '#3b82f6', icon: '#3b82f6',   iconBg: 'rgba(59,130,246,0.2)',  bar: '#3b82f6'   }
+      };
+      var c = colorMap[type] || colorMap.info;
+
+      // SVG icons by type
+      var icons = {
+        alert:   '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>',
+        warning: '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>',
+        success: '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+        info:    '<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+      };
+
+      var stack = document.getElementById('crpms-toast-stack');
+      if (!stack) return;
+
+      var toast = document.createElement('div');
+      toast.className = 'crpms-toast';
+      toast.style.cssText = 'position:relative; overflow:hidden; background:' + c.bg + '; border-color:' + c.border + ';';
+      toast.innerHTML =
+        '<div class="t-icon" style="background:' + c.iconBg + '; color:' + c.icon + ';">' + (icons[type] || icons.info) + '</div>' +
+        '<div class="t-body">' +
+          '<div class="t-title">' + title + '</div>' +
+          '<div class="t-msg">' + message + '</div>' +
+        '</div>' +
+        '<span class="t-close" onclick="this.parentElement.remove()">×</span>' +
+        '<div class="t-bar" style="background:' + c.bar + '; animation-duration:' + duration + 'ms;"></div>';
+
+      stack.appendChild(toast);
+
+      // Auto-remove
+      setTimeout(function () {
+        if (toast.parentElement) {
+          toast.classList.add('removing');
+          setTimeout(function () { if (toast.parentElement) toast.remove(); }, 300);
+        }
+      }, duration);
+    }
+  };
+
+  // ── Hook into WS updates ──────────────────────────────────────────
+  if (window.CRPMSSocket) {
+    CRPMSSocket.on(function (data) {
+      var newCount = data.active_alerts !== undefined ? parseInt(data.active_alerts) : null;
+
+      // New alert appeared since last WS message
+      if (newCount !== null && _prevAlertCount !== null && newCount > _prevAlertCount) {
+        var diff = newCount - _prevAlertCount;
+        CRPMSToast.show({
+          type: 'alert',
+          title: diff + ' New Alert' + (diff > 1 ? 's' : ''),
+          message: 'System generated ' + diff + ' new risk alert' + (diff > 1 ? 's' : '') + '. <a href="/dashboard/alerts/" style="color:#ef4444; text-decoration:underline;">View Alerts →</a>',
+          duration: 7000
+        });
+      }
+
+      // Drawdown guard became active
+      if (data.drawdown_guard_active === true) {
+        CRPMSToast.show({
+          type: 'warning',
+          title: 'Drawdown Guard Active',
+          message: 'Portfolio drawdown threshold breached. Positions under review.',
+          duration: 8000
+        });
+      }
+
+      if (newCount !== null) _prevAlertCount = newCount;
+    });
+  }
+})();
+</script>
+
 
 {% block scripts %}{% endblock %}
 </body>
