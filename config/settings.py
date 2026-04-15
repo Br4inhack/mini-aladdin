@@ -43,6 +43,7 @@ LOCAL_APPS = [
     'apps.data_ingestion',
     'apps.feature_engine',
     'apps.agents',
+    'apps.agents.sentiment_agent',
     'apps.portfolio',
     'apps.decision_engine',
     'apps.backtester',
