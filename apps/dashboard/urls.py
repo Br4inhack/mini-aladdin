@@ -16,4 +16,6 @@ urlpatterns = [
     path('backtest/', views.BacktestView.as_view(), name='backtest'),
     path('alerts/', views.AlertHistoryView.as_view(), name='alerts'),
     path('settings/', views.SettingsView.as_view(), name='settings'),
+    path('rl-monitor/', views.RLMonitorView.as_view(), name='rl_monitor'),
+    path('paper-trading/', views.PaperTradingView.as_view(), name='paper_trading'),
 ]

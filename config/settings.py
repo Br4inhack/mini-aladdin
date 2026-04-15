@@ -292,7 +292,7 @@ FEATURES = {
     'LIVE_WEBSOCKET': False,
 
     # Enable paper-trading mode (simulated order execution, no real money moved)
-    'PAPER_TRADING': False,
+    'PAPER_TRADING': True,
 }
 
 # ─── External API Keys (loaded from .env) ─────────────────────────────────────

@@ -31,7 +31,10 @@ urlpatterns = [
     path('portfolio/<int:portfolio_id>/sentiment-trend/<str:ticker_symbol>/', api_views.SentimentTrendView.as_view(), name='api-sentiment-trend'),
     path('portfolio/<int:portfolio_id>/sector-exposure/', api_views.SectorExposureView.as_view(), name='api-sector-exposure'),
     path('portfolio/<int:portfolio_id>/pnl-trend/', api_views.PnLTrendView.as_view(), name='api-pnl-trend'),
+    path('portfolio/<int:portfolio_id>/feature-importance/', api_views.FeatureImportanceView.as_view(), name='api-feature-importance'),
+    path('portfolio/<int:portfolio_id>/rl-agent-log/', api_views.RLAgentLogView.as_view(), name='api-rl-agent-log'),
+    path('portfolio/<int:portfolio_id>/paper-trades/', api_views.PaperTradesView.as_view(), name='api-paper-trades'),
 
-        path('portfolio/<int:portfolio_id>/macro-indicators/', api_views.MacroIndicatorView.as_view(), name='api-macro-indicators'),
+    path('portfolio/<int:portfolio_id>/macro-indicators/', api_views.MacroIndicatorView.as_view(), name='api-macro-indicators'),
     path('health/', api_views.HealthCheckAPIView.as_view(), name='api-health'),
 ]

@@ -1,0 +1,108 @@
+<!-- Feature Importance Panel -->
+<div class="card" style="margin-bottom:24px;" x-data="featureImportancePanel(1)" x-init="init()">
+  <div class="section-title" style="justify-content:space-between;">
+    <div style="display:flex; align-items:center;">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      XGBoost Risk Feature Importance
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span x-show="source === 'demo'" class="badge" style="background:rgba(245,158,11,0.1); color:var(--accent-yellow); font-size:9px; padding:3px 8px; letter-spacing:1px;">DEMO DATA</span>
+      <span x-show="source === 'live'" class="badge" style="background:rgba(16,185,129,0.1); color:var(--accent-green); font-size:9px; padding:3px 8px; letter-spacing:1px;">LIVE</span>
+      <span class="text-muted text-sm" x-show="ticker">for <span class="mono" x-text="ticker"></span></span>
+    </div>
+  </div>
+
+  <div x-show="loading" class="skeleton" style="height:220px; border-radius:8px; margin-top:16px;"></div>
+  <div x-show="!loading && !features.length" class="crpms-empty">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+    <div>
+      <div class="title">No Feature Data</div>
+      <p>The models have not yet processed factor importance metrics for this asset.</p>
+    </div>
+  </div>
+
+  <div x-show="!loading && features.length" style="margin-top:16px;">
+    <!-- Description -->
+    <p class="text-muted text-sm" style="margin-bottom:16px; line-height:1.5;">
+      How each factor contributes to the risk classification decision. Higher score = more influential.
+      <span x-show="source === 'demo'" style="color:var(--accent-yellow);"> — Live scores will load once XGBoost model is active.</span>
+    </p>
+
+    <!-- Horizontal bar chart canvas -->
+    <div :style="'height:' + (features.length * 32 + 20) + 'px; position:relative;'">
+      <canvas id="featureImportanceChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+function featureImportancePanel(pid) {
+  return {
+    portfolioId: pid,
+    loading: true,
+    features: [],
+    ticker: null,
+    source: 'demo',
+    _chart: null,
+
+    async init() {
+      try {
+        const res = await fetch(`/api/portfolio/${this.portfolioId}/feature-importance/`).then(r => r.json());
+        this.features = res.features || [];
+        this.ticker   = res.ticker;
+        this.source   = res.source || 'demo';
+        this.loading  = false;
+        if (this.features.length) this.$nextTick(() => this.renderChart());
+      } catch(e) { this.loading = false; }
+    },
+
+    renderChart() {
+      const canvas = document.getElementById('featureImportanceChart');
+      if (!canvas || !this.features.length) return;
+      if (this._chart) this._chart.destroy();
+
+      const labels = this.features.map(f => f.feature);
+      const scores = this.features.map(f => f.score);
+      const maxScore = Math.max(...scores);
+      const colors  = scores.map(s => {
+        const ratio = s / maxScore;
+        if (ratio > 0.75) return '#ef4444';
+        if (ratio > 0.5)  return '#f59e0b';
+        if (ratio > 0.25) return '#3b82f6';
+        return '#6b7280';
+      });
+
+      this._chart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data: scores,
+            backgroundColor: colors.map(c => c + 'bb'),
+            borderColor:     colors,
+            borderWidth: 1,
+            borderRadius: 4,
+            borderSkipped: false,
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { grid: { color:'rgba(75,85,99,0.2)' }, ticks: { color:'#9ca3af', max: 1 }, min: 0, max: 1 },
+            y: { grid: { display: false }, ticks: { color:'#d1d5db', font: { size: 12 } } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` Importance: ${(ctx.raw * 100).toFixed(1)}%`
+              }
+            }
+          }
+        }
+      });
+    }
+  };
+}
+</script>

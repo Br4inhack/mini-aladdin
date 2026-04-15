@@ -21,9 +21,12 @@
     </div>
 
     <!-- Instruction when no ticker selected -->
-    <div x-show="!selectedNewsTicker" style="padding:24px; text-align:center; color:var(--text-muted);">
-      <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="margin:0 auto 12px; opacity:0.3;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/></svg>
-      <p class="text-sm">Click any holding row above to load its news &amp; sentiment.</p>
+    <div x-show="!selectedNewsTicker" class="crpms-empty" style="border:none; margin:auto;">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/></svg>
+      <div>
+        <div class="title">Select an asset</div>
+        <p>Click any holding row above to load its news &amp; sentiment.</p>
+      </div>
     </div>
 
     <!-- Article list rendered by JS -->
@@ -55,8 +58,9 @@
     </div>
 
     <!-- Sparkline placeholder -->
-    <div x-show="!selectedNewsTicker" style="height:80px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px;">
-      Select a ticker to view trend
+    <div x-show="!selectedNewsTicker" class="crpms-empty" style="height:200px; border:none; padding:12px;">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:32px; height:32px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+      <div class="title">No Asset Selected</div>
     </div>
 
     <div x-show="selectedNewsTicker" style="height:200px; position:relative;">

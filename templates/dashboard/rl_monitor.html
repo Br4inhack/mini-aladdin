@@ -1,0 +1,284 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+
+{% block title %}RL Agent Monitor — CRPMS{% endblock %}
+{% block page_title %}RL Decision Agent{% endblock %}
+{% block page_subtitle %}Reinforcement learning agent performance monitoring{% endblock %}
+
+{% block content %}
+<div x-data="rlMonitor(1)" x-init="initRL()" x-cloak>
+
+  <!-- Coming-soon banner when no RL data yet -->
+  <div x-show="!loading && !available" class="card" style="margin-bottom:24px; border-color:rgba(59,130,246,0.3); background:rgba(59,130,246,0.05);">
+    <div style="display:flex; align-items:center; gap:16px; padding:8px 0;">
+      <div style="width:48px; height:48px; border-radius:12px; background:rgba(59,130,246,0.15); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="var(--accent-blue)"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+      </div>
+      <div>
+        <div style="font-weight:700; color:var(--text-main); margin-bottom:4px;">RL Agent Not Yet Active</div>
+        <div class="text-muted text-sm">Person 4's reinforcement learning agent is under development. Once integrated, this panel will show episode rewards, action distribution, and confidence evolution in real time. The panel is ready to display data as soon as it's written to <code style="background:rgba(255,255,255,0.05); padding:2px 5px; border-radius:4px;">DecisionLog.input_signals['episode_reward']</code>.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STAT ROW ──────────────────────────────────────────────────────────── -->
+  <div x-show="available" class="css-grid grid-cols-4" style="margin-bottom:24px;">
+    <div class="card">
+      <div class="section-title text-muted text-sm" style="margin-bottom:8px;">Total Decisions</div>
+      <div class="card-value mono" style="font-size:26px; font-weight:700;" x-text="stats.total"></div>
+    </div>
+    <div class="card">
+      <div class="section-title text-muted text-sm" style="margin-bottom:8px;">Avg Confidence</div>
+      <div class="card-value mono" style="font-size:26px; font-weight:700;" x-text="(stats.avgConf * 100).toFixed(0) + '%'"></div>
+    </div>
+    <div class="card">
+      <div class="section-title text-muted text-sm" style="margin-bottom:8px;">Dominant Action</div>
+      <div class="card-value mono" style="font-size:22px; font-weight:700;" x-text="stats.dominantAction"></div>
+    </div>
+    <div class="card">
+      <div class="section-title text-muted text-sm" style="margin-bottom:8px;">RL Episodes</div>
+      <div class="card-value mono" style="font-size:26px; font-weight:700;" x-text="episodeRewards.length || 'N/A'"></div>
+      <div class="text-muted" style="font-size:10px; margin-top:4px;">Populated by Person 4's agent</div>
+    </div>
+  </div>
+
+  <!-- ── CHARTS ROW ────────────────────────────────────────────────────────── -->
+  <div x-show="available" class="css-grid" style="grid-template-columns:1fr 1fr; gap:24px; margin-bottom:24px;">
+
+    <!-- Action Distribution -->
+    <div class="card">
+      <div class="section-title">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>
+        Action Distribution
+      </div>
+      <div style="height:260px; position:relative; margin-top:16px;">
+        <canvas id="actionDistChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Confidence Evolution -->
+    <div class="card">
+      <div class="section-title">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        Confidence Evolution
+      </div>
+      <div style="height:260px; position:relative; margin-top:16px;">
+        <canvas id="confidenceChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── EPISODE REWARDS (RL-specific) ──────────────────────────────────── -->
+  <div x-show="available && episodeRewards.length" class="card" style="margin-bottom:24px;">
+    <div class="section-title" style="justify-content:space-between;">
+      <div style="display:flex; align-items:center;">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+        Episode Rewards (RL Training)
+      </div>
+      <span class="badge" style="background:rgba(16,185,129,0.1); color:var(--accent-green);">Live from Person 4</span>
+    </div>
+    <div style="height:200px; position:relative; margin-top:16px;">
+      <canvas id="episodeRewardChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── RECENT DECISIONS TABLE ────────────────────────────────────────────── -->
+  <div x-show="available" class="card">
+    <div class="section-title">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      Recent Decisions
+    </div>
+    <div class="table-container" style="margin-top:16px;">
+      <table>
+        <thead><tr>
+          <th>Ticker</th><th>Action</th><th class="c">Confidence</th><th>Reasoning</th><th class="r">Time</th>
+        </tr></thead>
+        <tbody>
+          <tr x-show="loading"><td colspan="5"><div class="skeleton" style="height:32px; width:100%;"></div><div class="skeleton" style="height:32px; width:100%; margin-top:8px;"></div></td></tr>
+          <tr x-show="!loading && !logs.length">
+            <td colspan="5" style="padding:24px 0;">
+              <div class="crpms-empty" style="border:none;">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <div class="title">No Decisions Found</div>
+                <p>The system has not logged any agent decisions yet.</p>
+              </div>
+            </td>
+          </tr>
+          <template x-for="log in logs" :key="log.timestamp + log.ticker">
+            <tr>
+              <td class="mono font-bold" x-text="log.ticker"></td>
+              <td>
+                <span class="badge" :style="actionBadge(log.action)" x-text="log.action"></span>
+              </td>
+              <td class="c">
+                <div style="display:flex; align-items:center; gap:8px; justify-content:center;">
+                  <div style="width:60px; height:6px; border-radius:99px; background:rgba(255,255,255,0.05); overflow:hidden;">
+                    <div :style="'width:' + (log.confidence_score * 100) + '%; height:100%; border-radius:99px; background:' + confidenceColor(log.confidence_score)"></div>
+                  </div>
+                  <span class="mono text-sm" x-text="(log.confidence_score * 100).toFixed(0) + '%'"></span>
+                </div>
+              </td>
+              <td class="text-muted text-sm" style="max-width:300px; white-space:normal;" x-text="log.reasoning_text || '—'"></td>
+              <td class="r mono text-muted text-sm" x-text="relTime(log.timestamp)"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ACTION_COLORS = {
+  HOLD:       '#6b7280',
+  REDUCE:     '#f59e0b',
+  EXIT:       '#ef4444',
+  INCREASE:   '#10b981',
+  REALLOCATE: '#3b82f6'
+};
+
+function rlMonitor(pid) {
+  return {
+    portfolioId: pid,
+    loading: true,
+    available: false,
+    logs: [],
+    actionDist: {},
+    confidenceTrend: [],
+    episodeRewards: [],
+    stats: { total: 0, avgConf: 0, dominantAction: '—' },
+    _charts: {},
+
+    async initRL() {
+      try {
+        const res = await fetch(`/api/portfolio/${this.portfolioId}/rl-agent-log/`).then(r => r.json());
+        this.available      = res.available || false;
+        this.logs           = res.logs || [];
+        this.actionDist     = res.action_dist || {};
+        this.confidenceTrend = res.confidence_trend || [];
+        this.episodeRewards = res.episode_rewards || [];
+
+        // Compute stats
+        if (this.logs.length) {
+          this.stats.total = res.total_decisions;
+          this.stats.avgConf = this.logs.reduce((s, l) => s + l.confidence_score, 0) / this.logs.length;
+          this.stats.dominantAction = Object.entries(this.actionDist).sort((a,b) => b[1]-a[1])[0]?.[0] || '—';
+        }
+
+        this.loading = false;
+        if (this.available) {
+          this.$nextTick(() => {
+            this.renderActionDist();
+            this.renderConfidence();
+            if (this.episodeRewards.length) this.renderEpisodeRewards();
+          });
+        }
+      } catch(e) { console.error(e); this.loading = false; }
+    },
+
+    renderActionDist() {
+      const canvas = document.getElementById('actionDistChart');
+      if (!canvas) return;
+      const labels = Object.keys(this.actionDist);
+      const data   = Object.values(this.actionDist);
+      const colors = labels.map(l => ACTION_COLORS[l] || '#9ca3af');
+      this._charts.dist = new Chart(canvas, {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data, backgroundColor: colors.map(c => c + 'cc'), borderColor: colors, borderWidth: 2 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          cutout: '65%',
+          plugins: { legend: { position: 'right', labels: { color:'#9ca3af', usePointStyle:true, padding:16 } } }
+        }
+      });
+    },
+
+    renderConfidence() {
+      const canvas = document.getElementById('confidenceChart');
+      if (!canvas || !this.confidenceTrend.length) return;
+      const labels = this.confidenceTrend.map((_, i) => i + 1);
+      const data   = this.confidenceTrend.map(t => t.confidence);
+      const pointColors = this.confidenceTrend.map(t => ACTION_COLORS[t.action] || '#9ca3af');
+      this._charts.conf = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Confidence',
+            data,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59,130,246,0.08)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 5,
+            pointBackgroundColor: pointColors,
+            pointBorderColor: '#1e293b',
+            pointBorderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { grid:{display:false}, ticks:{color:'#9ca3af'} },
+            y: { grid:{color:'rgba(75,85,99,0.2)'}, ticks:{color:'#9ca3af'}, min:0, max:1 }
+          },
+          plugins: { legend:{display:false} }
+        }
+      });
+    },
+
+    renderEpisodeRewards() {
+      const canvas = document.getElementById('episodeRewardChart');
+      if (!canvas) return;
+      this._charts.ep = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: this.episodeRewards.map(r => 'Ep ' + (r.step + 1)),
+          datasets: [{
+            label: 'Episode Reward',
+            data: this.episodeRewards.map(r => r.reward),
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16,185,129,0.08)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { grid:{display:false}, ticks:{color:'#9ca3af'} },
+            y: { grid:{color:'rgba(75,85,99,0.2)'}, ticks:{color:'#9ca3af'} }
+          },
+          plugins: { legend:{display:false} }
+        }
+      });
+    },
+
+    actionBadge(action) {
+      const c = ACTION_COLORS[action] || '#9ca3af';
+      return `background:${c}22; color:${c}; border:1px solid ${c}55;`;
+    },
+    confidenceColor(score) {
+      if (score > 0.75) return '#10b981';
+      if (score > 0.5)  return '#3b82f6';
+      if (score > 0.3)  return '#f59e0b';
+      return '#ef4444';
+    },
+    relTime(iso) {
+      const diff = Date.now() - new Date(iso).getTime();
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      if (h > 24) return Math.floor(h/24) + 'd ago';
+      if (h > 0)  return h + 'h ago';
+      return m + 'm ago';
+    }
+  };
+}
+</script>
+{% endblock %}

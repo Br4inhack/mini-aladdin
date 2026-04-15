@@ -55,3 +55,17 @@ class SettingsView(View):
             'FEATURES': getattr(settings, 'FEATURES', {})
         }
         return render(request, 'dashboard/settings.html', context)
+
+
+class RLMonitorView(View):
+    def get(self, request):
+        return render(request, 'dashboard/rl_monitor.html', {'portfolio_id': 1})
+
+
+class PaperTradingView(View):
+    def get(self, request):
+        from django.conf import settings
+        return render(request, 'dashboard/paper_trading.html', {
+            'portfolio_id': 1,
+            'FEATURES': getattr(settings, 'FEATURES', {})
+        })
