@@ -13,6 +13,7 @@ urlpatterns = [
     
     # CRPMS REST API Layer
     path('api/', include('apps.portfolio.urls')),
+    path('api/sentiment/', include('apps.agents.sentiment_agent.urls')),
     
     # CRPMS Frontend Dashboard
     path('dashboard/', include('apps.dashboard.urls')),
